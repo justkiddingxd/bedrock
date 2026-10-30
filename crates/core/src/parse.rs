@@ -32,7 +32,7 @@ pub(crate) static REMINDER: LazyLock<Regex> =
 static LIST_MARK: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\s*(?:(?:[-*+]|\d+[.)])\s+(?:\[.\]\s+)?|#{1,6}\s+|>\s*)").unwrap());
 static TASK_META: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\s*(?:⏰\x{FE0F}?\s*\d{4}-\d{2}-\d{2}[ T]\d{1,2}:\d{2}|(?:📅|⏳|✅|🛫|➕)\x{FE0F}?\s*\d{4}-\d{2}-\d{2}|due:\d{4}-\d{2}-\d{2}|[⏫🔼🔽🔺⏬]\x{FE0F}?)")
+    Regex::new(r"\s*(?:⏰\x{FE0F}?\s*\d{4}-\d{2}-\d{2}[ T]\d{1,2}:\d{2}|(?:📅|⏳|✅|🛫|➕)\x{FE0F}?\s*\d{4}-\d{2}-\d{2}|due:\d{4}-\d{2}-\d{2}|[⏫🔼🔽🔺⏬]\x{FE0F}?|🔁\x{FE0F}?\s*[^📅⏳✅🛫➕⏰⏫🔼🔽🔺⏬#\n]+)")
         .unwrap()
 });
 
@@ -80,6 +80,8 @@ pub struct Task {
     pub done_date: Option<String>,
     /// Reminder time on the line, "YYYY-MM-DD HH:MM".
     pub reminder: Option<String>,
+    /// How the task repeats, as written after 🔁 («каждый понедельник»).
+    pub recurrence: Option<String>,
     pub priority: Priority,
     pub tags: Vec<String>,
 }
@@ -94,6 +96,10 @@ pub struct Reminder {
     pub text: String,
     /// The line is a completed task: no need to remind.
     pub done: bool,
+    /// The line is a task (a repeating task moves on when it is done).
+    pub task: bool,
+    /// How the reminder repeats, as written after 🔁.
+    pub repeat: Option<String>,
 }
 
 /// A scalar frontmatter field other than title, tags and aliases.
@@ -218,7 +224,14 @@ pub fn parse_reminder(line: usize, raw: &str, task: Option<&Task>) -> Option<Rem
         Some(t) => t.text.clone(),
         None => TASK_META.replace_all(&LIST_MARK.replace(raw, ""), "").trim().to_string(),
     };
-    Some(Reminder { line, at: format!("{} {hour:02}:{minute:02}", &c[1]), text, done: task.is_some_and(|t| t.done) })
+    Some(Reminder {
+        line,
+        at: format!("{} {hour:02}:{minute:02}", &c[1]),
+        text,
+        done: task.is_some_and(|t| t.done),
+        task: task.is_some(),
+        repeat: crate::recur::RECUR.captures(raw).map(|c| c[1].trim().to_string()),
+    })
 }
 
 /// Parses a task line like "- [ ] Call Bob 📅 2026-11-01 ⏫ #work".
@@ -246,6 +259,7 @@ pub fn parse_task(line: usize, raw: &str) -> Option<Task> {
         scheduled: SCHEDULED.captures(body).map(|c| c[1].to_string()),
         done_date: DONE_DATE.captures(body).map(|c| c[1].to_string()),
         reminder: REMINDER.captures(body).map(|c| format!("{} {:0>2}:{}", &c[1], &c[2], &c[3])),
+        recurrence: crate::recur::RECUR.captures(body).map(|c| c[1].trim().to_string()),
         priority,
         tags: tags_in(&INLINE_CODE.replace_all(body, "")).map(str::to_string).collect(),
     })
@@ -442,7 +456,10 @@ mod tests {
             "Не напоминание ⏰ 2026-10-30 25:00\n",
         ));
         assert_eq!(p.reminders.len(), 3);
-        assert_eq!(p.reminders[0], Reminder { line: 0, at: "2026-10-30 09:05".into(), text: "Позвонить маме".into(), done: false });
+        assert_eq!(
+            p.reminders[0],
+            Reminder { line: 0, at: "2026-10-30 09:05".into(), text: "Позвонить маме".into(), done: false, task: false, repeat: None }
+        );
         assert_eq!(p.reminders[1].text, "Купить хлеб");
         assert_eq!(p.tasks[0].text, "Купить хлеб");
         assert_eq!(p.tasks[0].reminder.as_deref(), Some("2026-10-30 18:00"));

@@ -33,6 +33,7 @@ pub fn start(app: AppHandle) {
                 if let Some(f) = fired.as_mut() {
                     notify_due(&app, f, &items);
                 }
+                advance_repeating(&app, &items);
                 upload(&app, &items, &mut uploaded).await;
             }
             tokio::time::sleep(TICK).await;
@@ -99,6 +100,38 @@ fn notify_due(app: &AppHandle, fired: &mut Fired, items: &[ReminderItem]) {
     }
     if changed {
         fired.save();
+    }
+}
+
+/// Repeating reminder lines (not tasks, which repeat when done) whose time has
+/// passed move to their next time. Every device computes the same next time,
+/// so two of them doing it at once write the same text.
+fn advance_repeating(app: &AppHandle, items: &[ReminderItem]) {
+    let now = Local::now().naive_local();
+    let due: Vec<_> = items
+        .iter()
+        .filter(|r| !r.reminder.task && r.reminder.repeat.is_some() && local_time(r).is_some_and(|at| at <= now))
+        .collect();
+    if due.is_empty() {
+        return;
+    }
+    let state = app.state::<AppState>();
+    let Ok(mut guard) = state.ws.write() else { return };
+    let Some(ws) = guard.as_mut() else { return };
+    let mut changed = Vec::new();
+    for r in due {
+        match bedrock_core::ops::advance_reminder(&ws.vault, &r.path, r.reminder.line, now) {
+            Ok(true) => {
+                ws.index.update_path(&ws.vault, &r.path);
+                changed.push(r.path.clone());
+            }
+            Ok(false) => {}
+            Err(e) => tracing::warn!("repeating reminder in {}: {e}", r.path),
+        }
+    }
+    drop(guard);
+    if !changed.is_empty() {
+        let _ = app.emit("vault:changed", changed);
     }
 }
 

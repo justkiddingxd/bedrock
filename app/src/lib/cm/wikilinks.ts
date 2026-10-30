@@ -9,6 +9,7 @@ import {
 } from '@codemirror/view';
 import type { Completion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 import type { NoteRef } from '../api';
+import { setLinesDone } from './format';
 import { addDays, dayLabel, localDate, weekdayName } from '../dates';
 import { nextWeekday } from '../quick';
 
@@ -94,9 +95,7 @@ export function wikilinks(opts: { onOpenLink: (raw: string) => void; onTag: (tag
           const start = view.posAtDOM(target);
           const pos = start + Math.max(0, view.state.sliceDoc(start, start + 8).indexOf('['));
           const box = view.state.sliceDoc(pos, pos + 3);
-          if (/^\[[ xX]\]$/.test(box)) {
-            view.dispatch({ changes: { from: pos, to: pos + 3, insert: box === '[ ]' ? '[x]' : '[ ]' } });
-          }
+          if (/^\[.\]$/.test(box)) void setLinesDone(view, [view.state.doc.lineAt(pos).number], !/^\[[xX-]\]$/.test(box));
           e.preventDefault();
           return true;
         }
@@ -148,22 +147,24 @@ export function dateCompletion() {
 export function toggleTask(view: EditorView): boolean {
   const seen = new Set<number>();
   const changes: { from: number; to?: number; insert: string }[] = [];
+  const toggles: { open: number[]; closed: number[] } = { open: [], closed: [] };
   for (const range of view.state.selection.ranges) {
     const line = view.state.doc.lineAt(range.head);
     if (seen.has(line.number)) continue;
     seen.add(line.number);
-    const task = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])\]/.exec(line.text);
+    const task = /^(\s*(?:[-*+]|\d+[.)])\s+\[)(.)\]/.exec(line.text);
     const item = /^(\s*(?:[-*+]|\d+[.)])\s+)/.exec(line.text);
     if (task) {
-      const at = line.from + task[1].length;
-      changes.push({ from: at, to: at + 1, insert: task[2] === ' ' ? 'x' : ' ' });
+      // Through the core, like a click on the checkbox: ✅ date and the next occurrence.
+      (/[xX-]/.test(task[2]) ? toggles.closed : toggles.open).push(line.number);
     } else if (item) {
       changes.push({ from: line.from + item[1].length, insert: '[ ] ' });
     } else {
       changes.push({ from: line.from + (/^\s*/.exec(line.text)?.[0].length ?? 0), insert: '- [ ] ' });
     }
   }
-  view.dispatch({ changes });
+  if (changes.length) view.dispatch({ changes });
+  void setLinesDone(view, toggles.open, true).then(() => setLinesDone(view, toggles.closed, false));
   return true;
 }
 

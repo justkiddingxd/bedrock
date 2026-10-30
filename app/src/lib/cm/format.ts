@@ -3,6 +3,7 @@
 import { EditorSelection, type ChangeSpec, type EditorState } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { startCompletion } from '@codemirror/autocomplete';
+import { api } from '../api';
 
 function done(view: EditorView) {
   view.focus();
@@ -114,9 +115,36 @@ export function setBlock(view: EditorView, block: Block): boolean {
   });
 }
 
-/** Marks a task line done or not done. */
+/**
+ * Marks task lines done or not through the core, as everywhere else in the
+ * app: the ✅ date, and above a repeating task its next occurrence. Done from
+ * the bottom up, so an inserted line does not shift the ones still to do.
+ */
+export async function setLinesDone(view: EditorView, lines: number[], on: boolean): Promise<void> {
+  for (const n of [...new Set(lines)].sort((a, b) => b - a)) {
+    if (n > view.state.doc.lines) continue;
+    const before = view.state.doc.line(n).text;
+    let res: { line: string; next: string | null };
+    try {
+      res = await api.taskLineDone(before, on);
+    } catch {
+      continue;
+    }
+    // Typed over meanwhile: leave the line alone.
+    if (n > view.state.doc.lines || view.state.doc.line(n).text !== before) continue;
+    const line = view.state.doc.line(n);
+    view.dispatch({ changes: { from: line.from, to: line.to, insert: res.next ? `${res.next}\n${res.line}` : res.line }, userEvent: 'input.task' });
+  }
+}
+
+/** Marks the selected task lines done or not done. */
 export function setDone(view: EditorView, on: boolean): boolean {
-  return rewriteLines(view, (text) => text.replace(/^(\s*[-*+]\s+\[)[ xX](\])/, `$1${on ? 'x' : ' '}$2`));
+  void setLinesDone(
+    view,
+    selectedLines(view.state).map((l) => l.number),
+    on,
+  );
+  return done(view);
 }
 
 // ------------------------------------------------------------ inserts

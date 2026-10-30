@@ -1272,6 +1272,15 @@ html[data-drag] * {
 .task-sub .prio-high {
   color: var(--danger);
 }
+.task-sub .task-repeat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.task-sub .task-progress {
+  color: var(--code);
+  font-weight: 500;
+}
 .task-sub .task-alarm {
   display: inline-flex;
   align-items: center;

@@ -286,6 +286,31 @@ pub fn toggle_task(state: State<'_, AppState>, path: String, line: usize) -> Cmd
     })
 }
 
+/// Sets a task's status: "x" done, " " to do, "/" in progress (the board's columns).
+#[tauri::command]
+pub fn set_task_status(state: State<'_, AppState>, path: String, line: usize, status: String) -> CmdResult<String> {
+    let status = status.chars().next().ok_or("пустой статус")?;
+    with_ws_mut(&state, |ws| {
+        let content = ops::set_task_status(&ws.vault, &path, line, status, today()).str_err()?;
+        ws.index.update_path(&ws.vault, &path);
+        Ok(content)
+    })
+}
+
+#[derive(serde::Serialize)]
+pub struct LineDone {
+    line: String,
+    next: Option<String>,
+}
+
+/// A task line from the editor marked done or not: the new line and, for a
+/// repeating task, its next occurrence to put above it.
+#[tauri::command]
+pub fn task_line_done(line: String, done: bool) -> CmdResult<LineDone> {
+    let (line, next) = ops::text::line_done(&line, done, today()).str_err()?;
+    Ok(LineDone { line, next })
+}
+
 #[tauri::command]
 pub fn list_tags(state: State<'_, AppState>) -> CmdResult<Vec<TagCount>> {
     with_ws(&state, |ws| Ok(ws.index.tags()))

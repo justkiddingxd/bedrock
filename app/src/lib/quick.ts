@@ -4,6 +4,7 @@
  */
 import { addDays, toDate } from './dates';
 import { parseReminder } from './reminder';
+import { findRepeat, firstFrom, parseRule } from './recur';
 
 export interface QuickTask {
   text: string;
@@ -11,6 +12,8 @@ export interface QuickTask {
   high: boolean;
   /** «напомнить завтра в 9»: "YYYY-MM-DD HH:MM". */
   remind: string | null;
+  /** «каждый понедельник»: how the task repeats. */
+  repeat: string | null;
 }
 
 const WEEKDAYS: [RegExp, number][] = [
@@ -44,11 +47,16 @@ function dateOf(day: number, month: number, today: string): string | null {
 export function parseQuickTask(input: string, today: string): QuickTask {
   const reminder = parseReminder(input.trim());
   const remind = reminder?.at ?? null;
+  let repeat = reminder?.repeat ?? null;
   let text = (reminder ? reminder.text : input).trim();
   let high = false;
   if (/\s!+$/.test(text) || /^!+\s/.test(text)) {
     high = true;
     text = text.replace(/\s!+$/, '').replace(/^!+\s/, '').trim();
+  }
+  if (!repeat) {
+    const found = findRepeat(text);
+    if (found?.rest) [repeat, text] = [found.repeat, found.rest];
   }
 
   const rules: [RegExp, (m: RegExpMatchArray) => string | null][] = [
@@ -79,13 +87,16 @@ export function parseQuickTask(input: string, today: string): QuickTask {
     const m = text.match(re);
     if (!m) continue;
     const due = toDue(m);
-    if (due && text.length > m[0].length) return { text: text.slice(0, -m[0].length).trim(), due, high, remind };
+    if (due && text.length > m[0].length) return { text: text.slice(0, -m[0].length).trim(), due, high, remind, repeat };
   }
-  // A reminder alone puts the task on that day's list.
-  return { text, due: remind ? remind.slice(0, 10) : null, high, remind };
+  // A reminder alone puts the task on that day's list; a repeating one starts at its first day.
+  const rule = repeat ? parseRule(repeat) : null;
+  return { text, due: remind ? remind.slice(0, 10) : rule ? firstFrom(rule, today) : null, high, remind, repeat };
 }
 
 /** The markdown line for a parsed task (without "- [ ] "). */
 export function taskLine(t: QuickTask): string {
-  return [t.text, t.high ? '⏫' : '', t.due ? `📅 ${t.due}` : '', t.remind ? `⏰ ${t.remind}` : ''].filter(Boolean).join(' ');
+  return [t.text, t.high ? '⏫' : '', t.repeat ? `🔁 ${t.repeat}` : '', t.due ? `📅 ${t.due}` : '', t.remind ? `⏰ ${t.remind}` : '']
+    .filter(Boolean)
+    .join(' ');
 }

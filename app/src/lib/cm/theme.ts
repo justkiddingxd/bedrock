@@ -76,6 +76,7 @@ export const bedrockTheme = EditorView.theme({
   '.cm-date': { color: 'var(--text-2)', fontSize: '0.9em' },
   '.cm-date-done': { color: 'var(--text-3)' },
   '.cm-marker-alarm': { color: 'var(--accent)' },
+  '.cm-marker-repeat': { color: 'var(--accent)' },
   // Fenced code blocks: a box with copy and fold buttons on the opening line.
   '.cm-line.cm-codeblock': {
     padding: '0 14px',

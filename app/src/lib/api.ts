@@ -41,6 +41,8 @@ export interface TaskItem {
   doneDate: string | null;
   /** "YYYY-MM-DD HH:MM" */
   reminder: string | null;
+  /** How the task repeats, as written after 🔁. */
+  recurrence: string | null;
   priority: Priority;
   tags: string[];
 }
@@ -97,7 +99,16 @@ export interface ReminderWebhook { configured: boolean; url: string | null; last
 export interface WebhookTestResult { delivered: boolean; status: number | null; body: string; error: string | null }
 export interface CreatedToken { id: number; name: string; token: string }
 export interface McpInfo { binary: string | null; vault: string | null; server: string | null; serverVault: boolean }
-export interface ReminderItem { path: string; noteTitle: string; line: number; at: string; text: string; done: boolean }
+export interface ReminderItem {
+  path: string;
+  noteTitle: string;
+  line: number;
+  at: string;
+  text: string;
+  done: boolean;
+  task: boolean;
+  repeat: string | null;
+}
 
 export const api = {
   recentVaults: () => invoke<string[]>('recent_vaults'),
@@ -122,6 +133,10 @@ export const api = {
   quickSwitch: (query: string) => invoke<SwitchHit[]>('quick_switch', { query }),
   listTasks: (includeDone: boolean) => invoke<TaskItem[]>('list_tasks', { includeDone }),
   toggleTask: (path: string, line: number) => invoke<string>('toggle_task', { path, line }),
+  /** " " to do, "/" in progress, "x" done. */
+  setTaskStatus: (path: string, line: number, status: string) => invoke<string>('set_task_status', { path, line, status }),
+  /** A task line from the editor marked done or not, with the next occurrence of a repeating task. */
+  taskLineDone: (line: string, done: boolean) => invoke<{ line: string; next: string | null }>('task_line_done', { line, done }),
   setTaskDue: (path: string, line: number, due: string | null) => invoke<string>('set_task_due', { path, line, due }),
   dailyNote: (date?: string) => invoke<string>('daily_note', { date: date ?? null }),
 

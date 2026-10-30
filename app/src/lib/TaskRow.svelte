@@ -62,6 +62,10 @@
             : reminderLabel(task.reminder, today)}
         </span>
       {/if}
+      {#if task.recurrence && !task.done}
+        <span class="task-repeat" title="Повторяется"><Icon name="repeat" size={12} />{task.recurrence}</span>
+      {/if}
+      {#if task.status === '/' && !task.done}<span class="task-progress">в работе</span>{/if}
       {#if PRIORITY[task.priority] && !task.done}<span class="prio-{task.priority}">{PRIORITY[task.priority]}</span>{/if}
       {#if task.done && task.doneDate}<span>выполнено {dueLabel(task.doneDate, today)}</span>{/if}
     </div>

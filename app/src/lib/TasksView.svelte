@@ -90,11 +90,12 @@
     <Icon name="plus" />
     <input bind:value={draft} placeholder="Новая задача, например «счёт бухгалтеру до 5.11 !»" aria-label="Новая задача" />
   </form>
-  {#if parsed && (parsed.due || parsed.high || parsed.remind)}
+  {#if parsed && (parsed.due || parsed.high || parsed.remind || parsed.repeat)}
     <div class="quick-hint">
       {#if parsed.due}<span>срок: {dayLabel(parsed.due)}</span>{/if}
       {#if parsed.high}<span class="high">важно</span>{/if}
             {#if parsed.remind}<span>напомню {reminderLabel(parsed.remind, p.today)}</span>{/if}
+        {#if parsed.repeat}<span>🔁 {parsed.repeat}</span>{/if}
     </div>
   {/if}
 

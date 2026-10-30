@@ -630,6 +630,13 @@
       fail(e);
     }
     await refreshAll();
+    if (!t.done && t.recurrence) announceNext(t);
+  }
+
+  /** After a repeating task is done: when it comes back. */
+  function announceNext(t: TaskItem) {
+    const next = tasks.find((x) => !x.done && x.path === t.path && x.text === t.text && x.recurrence === t.recurrence);
+    if (next?.due) showToast(`Повторится ${dueLabel(next.due, today)}`, 'repeat');
   }
 
   async function reschedule(list: TaskItem[], date: string | null) {

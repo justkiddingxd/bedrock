@@ -35,6 +35,8 @@ fn main() {
             commands::quick_switch,
             commands::list_tasks,
             commands::toggle_task,
+            commands::set_task_status,
+            commands::task_line_done,
             commands::list_tags,
             commands::daily_note,
             commands::set_task_due,

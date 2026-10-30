@@ -82,6 +82,7 @@ const ICONS: Record<string, string> = {
   done: '<path d="M3.5 8.5l3 3 6-7"/>',
   flag: '<path d="M3.5 14V2.5M3.5 2.5h8l-1.5 3 1.5 3h-8"/>',
   alarm: '<path d="M4 11.5V7.5a4 4 0 0 1 8 0v4l1.2 1.5H2.8z"/><path d="M6.6 14.5h2.8"/>',
+  repeat: '<path d="M2.5 7a4 4 0 0 1 4-4h6M10.5 1l2 2-2 2M13.5 9a4 4 0 0 1-4 4h-6M5.5 15l-2-2 2-2"/>',
 };
 
 class MarkerWidget extends WidgetType {
@@ -118,7 +119,7 @@ const PRIORITY: Record<string, [string, string]> = {
 };
 
 const markerMatcher = new MatchDecorator({
-  regexp: /(?:(📅|⏳|✅)\u{FE0F}?(\s*)(\d{4}-\d{2}-\d{2}))|(?:⏰\u{FE0F}?\s*(\d{4}-\d{2}-\d{2}[ T]\d{1,2}:\d{2}))|([⏫🔺🔼🔽⏬])\u{FE0F}?/gu,
+  regexp: /(?:(📅|⏳|✅)\u{FE0F}?(\s*)(\d{4}-\d{2}-\d{2}))|(?:⏰\u{FE0F}?\s*(\d{4}-\d{2}-\d{2}[ T]\d{1,2}:\d{2}))|([⏫🔺🔼🔽⏬])\u{FE0F}?|(?:🔁\u{FE0F}?\s*([^📅⏳✅🛫➕⏰⏫🔼🔽🔺⏬#\n]*[^📅⏳✅🛫➕⏰⏫🔼🔽🔺⏬#\n\s]))/gu,
   decorate: (add, from, to, m) => {
     if (m[1]) {
       const [kind, label] = DATE_KIND[m[1]];
@@ -129,9 +130,13 @@ const markerMatcher = new MatchDecorator({
       const stampFrom = to - m[4].length;
       add(from, stampFrom, Decoration.replace({ widget: new MarkerWidget('alarm', 'cm-marker-alarm', 'напоминание') }));
       add(stampFrom, to, Decoration.mark({ class: 'cm-date cm-date-alarm' }));
-    } else {
+    } else if (m[5]) {
       const [cls, label] = PRIORITY[m[5]];
       add(from, to, Decoration.replace({ widget: new MarkerWidget('flag', cls, label) }));
+    } else if (m[6]) {
+      const ruleFrom = to - m[6].length;
+      add(from, ruleFrom, Decoration.replace({ widget: new MarkerWidget('repeat', 'cm-marker-repeat', 'повторяется') }));
+      add(ruleFrom, to, Decoration.mark({ class: 'cm-date cm-date-repeat' }));
     }
   },
 });

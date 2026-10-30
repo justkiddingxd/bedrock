@@ -8,6 +8,7 @@ pub mod index;
 pub mod merge;
 pub mod ops;
 pub mod parse;
+pub mod recur;
 pub mod render;
 pub mod vault;
 

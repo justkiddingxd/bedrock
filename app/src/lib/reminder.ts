@@ -4,12 +4,15 @@
  * (the Obsidian Reminder format), which the app, the server and MCP understand.
  */
 import { addDays, localDate, toDate } from './dates';
+import { findRepeat, firstFrom, nextAfter } from './recur';
 
 export interface ParsedReminder {
   /** The line without the phrase. */
   text: string;
   /** Local time, "YYYY-MM-DD HH:MM". */
   at: string;
+  /** «каждый понедельник»: the reminder repeats (written after 🔁). */
+  repeat?: string;
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -96,6 +99,12 @@ export function parseReminder(line: string, now = new Date()): ParsedReminder | 
   let rest = line.slice(start + trigger[2].length);
   const today = localDate(now);
   const found: Found = {};
+  // «напомнить каждый понедельник в 9»: the first such day, and the rule.
+  const repeating = findRepeat(rest, true);
+  if (repeating) {
+    found.day = firstFrom(repeating.rule, today);
+    rest = ` ${repeating.rest}`;
+  }
 
   // Date and time may come in either order: «завтра в 9», «в 9 завтра».
   for (let pass = 0; pass < 3; pass++) {
@@ -120,6 +129,8 @@ export function parseReminder(line: string, now = new Date()): ParsedReminder | 
   } else if (found.day) {
     const [h, m] = found.time ?? [9, 0];
     at = stamp(found.day, h, m);
+    // Today's time already passed: a repeating reminder starts at its next day.
+    if (repeating && at <= stamp(today, now.getHours(), now.getMinutes())) at = stamp(nextAfter(repeating.rule, found.day), h, m);
   } else {
     // Only a time: today, or tomorrow if it has passed.
     const [h, m] = found.time!;
@@ -135,7 +146,7 @@ export function parseReminder(line: string, now = new Date()): ParsedReminder | 
     .trimEnd();
   const after = rest.replace(/^[\s,;:—–-]+/, '').replace(/^(?:что|чтобы|про|о|об)\s+/i, '');
   const text = [before, after].filter((s) => s.trim()).join(' ');
-  return { text: text.replace(/(\S)\s{2,}/g, '$1 ').trimEnd(), at };
+  return { text: text.replace(/(\S)\s{2,}/g, '$1 ').trimEnd(), at, repeat: repeating?.repeat };
 }
 
 /** The line with its reminder phrase replaced by the marker, or `null` if it has none. */
@@ -143,7 +154,7 @@ export function convertLine(line: string, now = new Date()): string | null {
   if (/⏰/.test(line)) return null;
   const r = parseReminder(line, now);
   if (!r) return null;
-  return `${r.text}${r.text && !r.text.endsWith(' ') ? ' ' : ''}⏰ ${r.at}`;
+  return `${r.text}${r.text && !r.text.endsWith(' ') ? ' ' : ''}⏰ ${r.at}${r.repeat ? ` 🔁 ${r.repeat}` : ''}`;
 }
 
 /** "пт, 30 октября, 15:00" style label for an "YYYY-MM-DD HH:MM" stamp. */
