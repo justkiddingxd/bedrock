@@ -1,0 +1,10 @@
+/target
+/t
+/data
+node_modules
+/app/dist
+/app/src-tauri/gen
+/app/src-tauri/binaries
+# Local vaults used while developing hold personal notes and sync state.
+/examples/
+*.log

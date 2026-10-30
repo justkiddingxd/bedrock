@@ -1,0 +1,40 @@
+[package]
+name = "bedrock-server"
+description = "Self-hostable end-to-end encrypted sync server for Bedrock"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "bedrock-server"
+path = "src/main.rs"
+
+[dependencies]
+bedrock-core.workspace = true
+bedrock-mcp.workspace = true
+bedrock-proto.workspace = true
+
+anyhow.workspace = true
+argon2 = "0.5"
+axum = "0.8"
+base64.workspace = true
+chrono.workspace = true
+clap = { version = "4", features = ["derive", "env"] }
+hex = "0.4"
+hmac = "0.12"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
+tokio.workspace = true
+tokio-stream = { version = "0.1", features = ["sync"] }
+tower-http = { version = "0.6", features = ["trace"] }
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+bedrock-sync.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true

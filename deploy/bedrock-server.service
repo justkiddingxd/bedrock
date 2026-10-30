@@ -1,0 +1,23 @@
+[Unit]
+Description=Bedrock sync server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=bedrock
+Group=bedrock
+Environment=BEDROCK_DATA=/var/lib/bedrock
+# Port, registration, Telegram token: edit this file, then `systemctl restart bedrock-server`.
+EnvironmentFile=/etc/bedrock/server.env
+ExecStart=/opt/bedrock/bin/bedrock-server
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/bedrock
+
+[Install]
+WantedBy=multi-user.target
