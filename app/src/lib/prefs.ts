@@ -11,6 +11,8 @@ export interface Prefs {
   showTags: boolean;
   /** Hide Markdown marks outside the line being edited (live preview). */
   livePreview: boolean;
+  /** A chime when a task gets done. */
+  sounds: boolean;
 }
 
 /** Accent colors, each tuned for the light and the dark theme. */
@@ -23,7 +25,7 @@ export const ACCENTS = [
 
 const TEXT_SIZES: Record<TextSize, string> = { s: '15px', m: '16px', l: '17.5px' };
 const KEY = 'bedrock.prefs.v2';
-const DEFAULTS: Prefs = { theme: 'dark', accent: 'cobalt', textSize: 'm', showTags: true, livePreview: true };
+const DEFAULTS: Prefs = { theme: 'dark', accent: 'cobalt', textSize: 'm', showTags: true, livePreview: true, sounds: true };
 
 /** Sent on window when settings change, for parts that are not styled by CSS (the editor). */
 export const PREFS_EVENT = 'bedrock:prefs';

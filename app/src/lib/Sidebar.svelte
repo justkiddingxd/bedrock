@@ -190,7 +190,7 @@
         use:droppable={p.dnd.onDay(p.today)}
         onclick={() => p.onNavigate({ kind: 'today', date: '' })}
       >
-        <Icon name="sun" /><span class="name">Сегодня</span>
+        <Icon name="home" /><span class="name">Главная</span>
         {#if p.counts.today}<span class="count">{p.counts.today}</span>{/if}
       </button>
       <button class="nav-item" class:active={p.view.kind === 'upcoming'} onclick={() => p.onNavigate({ kind: 'upcoming' })}>

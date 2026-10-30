@@ -68,6 +68,13 @@
     </label>
   </section>
   <section>
+    <h4>Звуки</h4>
+    <label class="check-row">
+      <input type="checkbox" checked={prefs.sounds} onchange={(e) => set('sounds', e.currentTarget.checked)} />
+      <span>Звук при выполнении задачи</span>
+    </label>
+  </section>
+  <section>
     <h4>Боковая панель</h4>
     <label class="check-row">
       <input type="checkbox" checked={prefs.showTags} onchange={(e) => set('showTags', e.currentTarget.checked)} />

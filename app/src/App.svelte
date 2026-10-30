@@ -32,6 +32,7 @@
   import { sameView, type Folder, type View } from './lib/views';
   import { droppable, type Dnd } from './lib/drag';
   import { loadPrefs, savePrefs } from './lib/prefs';
+  import { playDone } from './lib/sound';
   import Sidebar, { NEW_FOLDER } from './lib/Sidebar.svelte';
   import FolderPicker from './lib/FolderPicker.svelte';
   import PromptDialog from './lib/PromptDialog.svelte';
@@ -625,6 +626,7 @@
   // ------------------------------------------------------------ tasks
 
   async function toggleTask(t: TaskItem) {
+    if (!t.done) playDone();
     tasks = tasks.map((x) => (x === t ? { ...x, done: !x.done, doneDate: x.done ? null : today } : x));
     try {
       await api.toggleTask(t.path, t.line);
@@ -638,6 +640,7 @@
   /** The board moves a task between «сделать» (" "), «в работе» ("/") and «готово» ("x"). */
   async function setTaskStatus(t: TaskItem, status: string) {
     const done = status === 'x';
+    if (done && !t.done) playDone();
     tasks = tasks.map((x) => (x === t ? { ...x, status, done, doneDate: done ? today : null } : x));
     try {
       await api.setTaskStatus(t.path, t.line, status);

@@ -1,6 +1,6 @@
 <script lang="ts" module>
   export const COMMANDS = [
-    { id: 'today', label: 'Сегодня', icon: 'sun', keys: 'Ctrl Shift D' },
+    { id: 'today', label: 'Главная', icon: 'home', keys: 'Ctrl Shift D' },
     { id: 'upcoming', label: 'Предстоящие задачи', icon: 'calendar' },
     { id: 'board', label: 'Доска задач', icon: 'board' },
     { id: 'inbox', label: 'Без папки', icon: 'inbox' },

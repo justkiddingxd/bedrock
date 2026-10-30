@@ -4,6 +4,7 @@ import { EditorSelection, type ChangeSpec, type EditorState } from '@codemirror/
 import type { EditorView } from '@codemirror/view';
 import { startCompletion } from '@codemirror/autocomplete';
 import { api } from '../api';
+import { playDone } from '../sound';
 
 function done(view: EditorView) {
   view.focus();
@@ -121,6 +122,7 @@ export function setBlock(view: EditorView, block: Block): boolean {
  * the bottom up, so an inserted line does not shift the ones still to do.
  */
 export async function setLinesDone(view: EditorView, lines: number[], on: boolean): Promise<void> {
+  if (on && lines.length) playDone();
   for (const n of [...new Set(lines)].sort((a, b) => b - a)) {
     if (n > view.state.doc.lines) continue;
     const before = view.state.doc.line(n).text;

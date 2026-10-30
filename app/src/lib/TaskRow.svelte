@@ -18,6 +18,8 @@
   let { task, today, showNote = true, showDate = true, onToggle, onOpen, onMenu }: Props = $props();
 
   const PRIORITY: Record<string, string> = { high: 'важно', medium: 'средний', low: 'низкий' };
+  /** The check pops and draws itself when the task gets done here. */
+  let pop = $state(false);
 
   const source = $derived.by(() => {
     const day = dailyDay(task.path);
@@ -43,10 +45,15 @@
   <input
     type="checkbox"
     class="check"
+    class:pop
     checked={task.done}
     aria-label="Выполнено: {task.text}"
     onclick={(e) => {
       e.preventDefault();
+      if (!task.done) {
+        pop = true;
+        setTimeout(() => (pop = false), 500);
+      }
       onToggle(task);
     }}
   />

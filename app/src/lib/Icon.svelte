@@ -11,6 +11,8 @@
     plus: '<path d="M8 3v10M3 8h10"/>',
     'chevron-down': '<path d="M4 6l4 4 4-4"/>',
     'chevron-up': '<path d="M4 10l4-4 4 4"/>',
+    home: '<path d="M2.5 7.25L8 2.75l5.5 4.5v5.75a1 1 0 0 1-1 1H10V10H6v4H3.5a1 1 0 0 1-1-1z"/>',
+    image: '<rect x="2" y="2.5" width="12" height="11" rx="1.5"/><circle cx="5.75" cy="6.25" r="1.25"/><path d="M14 10.5l-3.5-3.5L4 13.5"/>',
     repeat: '<path d="M2.5 7a4 4 0 0 1 4-4h6M10.5 1l2 2-2 2M13.5 9a4 4 0 0 1-4 4h-6M5.5 15l-2-2 2-2"/>',
     board: '<rect x="1.75" y="2.5" width="3.5" height="11" rx="1"/><rect x="6.25" y="2.5" width="3.5" height="7" rx="1"/><rect x="10.75" y="2.5" width="3.5" height="9" rx="1"/>',
     bold: '<path d="M4.5 2.75h4.25a2.6 2.6 0 0 1 0 5.2H4.5zM4.5 7.95h5a2.65 2.65 0 0 1 0 5.3h-5z" stroke-width="1.8"/>',

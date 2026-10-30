@@ -1,4 +1,4 @@
-/** Widgets of the «Сегодня» screen: which are shown, in which column and order, and their options. */
+/** Widgets of the main screen («Главная»): which are shown, in which column and order, and their options. */
 
 export type WidgetId =
   | 'tasks'

@@ -218,7 +218,6 @@
   });
 
   let draft = $state('');
-  let typing = $state(false);
   const parsed = $derived(draft.trim() ? parseQuickTask(draft, p.today) : null);
   let editor = $state<ReturnType<typeof Editor>>();
   let source = $state<{ path: string; content: string } | null>(null);
@@ -285,8 +284,7 @@
         bind:value={draft}
         placeholder={isToday ? 'Добавить задачу' : 'Добавить задачу на этот день'}
         aria-label="Новая задача"
-        onfocus={() => (typing = true)}
-        onblur={() => (typing = false)}
+        title="Срок можно писать словами: «в пятницу в 18», «завтра», «каждый понедельник»"
       />
     </form>
     {#if parsed && (parsed.due || parsed.high || parsed.remind || parsed.repeat)}
@@ -296,9 +294,6 @@
         {#if parsed.remind}<span>напомню {reminderLabel(parsed.remind, p.today)}</span>{/if}
         {#if parsed.repeat}<span>🔁 {parsed.repeat}</span>{/if}
       </div>
-    {:else if typing && !draft.trim()}
-      <!-- The example lives here, where it fits even in a narrow column. -->
-      <div class="quick-hint muted">Например: «позвонить маме в пятницу в 18», «отчёт завтра !»</div>
     {/if}
     {#if overdue.length}
       <div class="overdue-box">

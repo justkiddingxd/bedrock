@@ -142,7 +142,7 @@
     <dl class="props">
       {#if day}
         <dt>День</dt>
-        <dd><button onclick={() => p.onOpenDay(day)}>Открыть на экране «Сегодня»</button></dd>
+        <dd><button onclick={() => p.onOpenDay(day)}>Открыть на главной</button></dd>
       {:else}
         <dt>Папка</dt>
         <dd><button onclick={() => p.onOpenFolder(folder)}>{folder || 'Без папки'}</button></dd>
