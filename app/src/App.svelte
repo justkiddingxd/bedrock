@@ -40,6 +40,7 @@
   import NoteRail from './lib/NoteRail.svelte';
   import NoteList from './lib/NoteList.svelte';
   import TasksView from './lib/TasksView.svelte';
+  import BoardView from './lib/BoardView.svelte';
   import Switcher, { type CommandId } from './lib/Switcher.svelte';
   import SyncDialog from './lib/SyncDialog.svelte';
   import Integrations from './lib/Integrations.svelte';
@@ -116,6 +117,7 @@
       overdue: tasks.filter((t) => !t.done && t.due && t.due < today).length,
       inbox: summaries.filter((s) => !s.path.includes('/')).length,
       all: summaries.length,
+      doing: tasks.filter((t) => !t.done && t.status === '/').length,
     };
   });
 
@@ -633,6 +635,20 @@
     if (!t.done && t.recurrence) announceNext(t);
   }
 
+  /** The board moves a task between «сделать» (" "), «в работе» ("/") and «готово» ("x"). */
+  async function setTaskStatus(t: TaskItem, status: string) {
+    const done = status === 'x';
+    tasks = tasks.map((x) => (x === t ? { ...x, status, done, doneDate: done ? today : null } : x));
+    try {
+      await api.setTaskStatus(t.path, t.line, status);
+    } catch (e) {
+      fail(e);
+    }
+    await refreshAll();
+    window.dispatchEvent(new CustomEvent(CHANGED_EVENT, { detail: [t.path] }));
+    if (done && !t.done && t.recurrence) announceNext(t);
+  }
+
   /** After a repeating task is done: when it comes back. */
   function announceNext(t: TaskItem) {
     const next = tasks.find((x) => !x.done && x.path === t.path && x.text === t.text && x.recurrence === t.recurrence);
@@ -771,6 +787,7 @@
     switcherOpen = false;
     if (id === 'today') navigate({ kind: 'today', date: today });
     else if (id === 'upcoming') navigate({ kind: 'upcoming' });
+    else if (id === 'board') navigate({ kind: 'board' });
     else if (id === 'inbox') navigate({ kind: 'inbox' });
     else if (id === 'all') navigate({ kind: 'all' });
     else if (id === 'new') newNote();
@@ -1014,6 +1031,8 @@
               onError={(m) => showToast(m, 'warn')}
             />
           {/key}
+        {:else if view.kind === 'board'}
+          <BoardView {tasks} {today} onOpen={openNote} onToggle={toggleTask} onSetStatus={setTaskStatus} onTaskMenu={taskMenu} />
         {:else if view.kind === 'upcoming'}
           <TasksView {tasks} {today} {dnd} onToggle={toggleTask} onOpen={openNote} onReschedule={reschedule} onTaskMenu={taskMenu} onAddTask={addTask} />
         {:else if list}

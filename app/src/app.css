@@ -2318,6 +2318,110 @@ html[data-drag='widget'] .widget-drop {
   font-size: 12.5px;
 }
 
+/* ------------------------------------------------------------ board */
+
+.board-view {
+  padding: 24px 32px 48px;
+}
+.board-filter {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: var(--field);
+  color: var(--text-2);
+}
+.board-filter:focus-within {
+  border-color: var(--accent-line);
+}
+.board-filter input {
+  width: 220px;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text);
+  user-select: text;
+}
+.board-hint {
+  margin: -6px 0 16px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(230px, 1fr));
+  gap: 14px;
+  align-items: start;
+  overflow-x: auto;
+}
+.board-col {
+  min-height: 220px;
+  padding: 12px 10px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: var(--sidebar);
+}
+.board-col-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.board-col-head .sub {
+  color: var(--text-2);
+  font-weight: 400;
+}
+.board-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.board-dot.doing {
+  background: var(--code);
+}
+.board-dot.done {
+  background: var(--ok);
+}
+.board-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.board-card .task-row {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: var(--elev);
+  cursor: grab;
+}
+.board-card .task-row:hover {
+  border-color: var(--line);
+  background: var(--elev);
+}
+.board-card .task-text {
+  font-size: 13.5px;
+}
+.board-empty {
+  padding: 22px 10px;
+  border: 1.5px dashed var(--line);
+  border-radius: 11px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  text-align: center;
+}
+.board-more {
+  align-self: center;
+  margin: 4px 0;
+  font-size: 12.5px;
+}
+
 /* ------------------------------------------------------------ narrow widths */
 
 @container (max-width: 900px) {

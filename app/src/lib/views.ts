@@ -5,6 +5,7 @@ export type View =
   | { kind: 'all' }
   | { kind: 'inbox' }
   | { kind: 'upcoming' }
+  | { kind: 'board' }
   | { kind: 'folder'; path: string }
   | { kind: 'tag'; tag: string };
 

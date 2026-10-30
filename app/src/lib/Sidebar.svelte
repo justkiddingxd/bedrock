@@ -17,7 +17,7 @@
     vaultRoot: string;
     view: View;
     today: string;
-    counts: { today: number; inbox: number; all: number; overdue: number };
+    counts: { today: number; inbox: number; all: number; overdue: number; doing: number };
     /** Subfolders and notes of a folder ('' = the vault root), sorted. */
     childrenOf: (dir: string) => { folders: Folder[]; notes: string[] };
     tags: { tag: string; count: number }[];
@@ -196,6 +196,10 @@
       <button class="nav-item" class:active={p.view.kind === 'upcoming'} onclick={() => p.onNavigate({ kind: 'upcoming' })}>
         <Icon name="calendar" /><span class="name">Предстоящие</span>
         {#if p.counts.overdue}<span class="count danger" title="Просрочено">{p.counts.overdue}</span>{/if}
+      </button>
+      <button class="nav-item" class:active={p.view.kind === 'board'} onclick={() => p.onNavigate({ kind: 'board' })}>
+        <Icon name="board" /><span class="name">Доска</span>
+        {#if p.counts.doing}<span class="count" title="В работе">{p.counts.doing}</span>{/if}
       </button>
       <button class="nav-item" class:active={p.view.kind === 'all'} onclick={() => p.onNavigate({ kind: 'all' })}>
         <Icon name="notes" /><span class="name">Все заметки</span>
