@@ -61,6 +61,13 @@
     </div>
   </section>
   <section>
+    <h4>Редактор</h4>
+    <label class="check-row">
+      <input type="checkbox" checked={prefs.livePreview} onchange={(e) => set('livePreview', e.currentTarget.checked)} />
+      <span>Скрывать разметку<small>Символы # ** [[ ]] видны только в строке, которую правите</small></span>
+    </label>
+  </section>
+  <section>
     <h4>Боковая панель</h4>
     <label class="check-row">
       <input type="checkbox" checked={prefs.showTags} onchange={(e) => set('showTags', e.currentTarget.checked)} />

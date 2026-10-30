@@ -9,6 +9,8 @@ export interface Prefs {
   textSize: TextSize;
   /** The tags section of the sidebar. */
   showTags: boolean;
+  /** Hide Markdown marks outside the line being edited (live preview). */
+  livePreview: boolean;
 }
 
 /** Accent colors, each tuned for the light and the dark theme. */
@@ -21,7 +23,10 @@ export const ACCENTS = [
 
 const TEXT_SIZES: Record<TextSize, string> = { s: '15px', m: '16px', l: '17.5px' };
 const KEY = 'bedrock.prefs.v2';
-const DEFAULTS: Prefs = { theme: 'dark', accent: 'cobalt', textSize: 'm', showTags: true };
+const DEFAULTS: Prefs = { theme: 'dark', accent: 'cobalt', textSize: 'm', showTags: true, livePreview: true };
+
+/** Sent on window when settings change, for parts that are not styled by CSS (the editor). */
+export const PREFS_EVENT = 'bedrock:prefs';
 
 export function loadPrefs(): Prefs {
   try {
@@ -57,6 +62,7 @@ export function applyPrefs(p: Prefs) {
 export function savePrefs(p: Prefs) {
   localStorage.setItem(KEY, JSON.stringify(p));
   applyPrefs(p);
+  window.dispatchEvent(new CustomEvent(PREFS_EVENT, { detail: p }));
 }
 
 systemDark.addEventListener('change', () => applyPrefs(current));

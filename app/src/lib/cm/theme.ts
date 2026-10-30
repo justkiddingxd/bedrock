@@ -77,6 +77,11 @@ export const bedrockTheme = EditorView.theme({
   '.cm-date-done': { color: 'var(--text-3)' },
   '.cm-marker-alarm': { color: 'var(--accent)' },
   '.cm-marker-repeat': { color: 'var(--accent)' },
+  // Live preview
+  '.cm-lp-bullet': { color: 'var(--text-2)', padding: '0 1px' },
+  '.cm-lp-hr': { display: 'inline-block', width: '100%', height: '1px', verticalAlign: 'middle', background: 'var(--line)' },
+  '.cm-line.cm-lp-quote': { borderLeft: '2px solid var(--line)', paddingLeft: '14px', color: 'var(--text-2)' },
+  '.cm-lp-code': { padding: '1px 4px', borderRadius: '4px', background: 'var(--hover)' },
   // Fenced code blocks: a box with copy and fold buttons on the opening line.
   '.cm-line.cm-codeblock': {
     padding: '0 14px',

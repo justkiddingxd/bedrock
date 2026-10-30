@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, untrack } from 'svelte';
-  import { Annotation, EditorState, type Extension } from '@codemirror/state';
+  import { Annotation, Compartment, EditorState, type Extension } from '@codemirror/state';
   import { EditorView, drawSelection, dropCursor, highlightSpecialChars, keymap, placeholder } from '@codemirror/view';
   import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
   import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
@@ -13,6 +13,8 @@
   import { toggleWrap } from './cm/format';
   import { editorMenu } from './cm/menu';
   import { codeBlocks } from './cm/codeblocks';
+  import { livePreview } from './cm/livepreview';
+  import { PREFS_EVENT, loadPrefs, type Prefs } from './prefs';
   import { bedrockHighlight, bedrockTheme } from './cm/theme';
   import { dateCompletion, toggleTask, wikilinkCompletion, wikilinks } from './cm/wikilinks';
   import { decorations } from './cm/decor';
@@ -45,6 +47,16 @@
   let timer: ReturnType<typeof setTimeout> | undefined;
   let queue: Promise<void> = Promise.resolve();
   let menu = $state<{ x: number; y: number; items: MenuEntry[] } | null>(null);
+  /** Live preview, switched in the appearance settings. */
+  const preview = new Compartment();
+  const previewOf = (on: boolean) => (on ? livePreview : []);
+
+  function onPrefs(e: Event) {
+    const on = (e as CustomEvent<Prefs>).detail.livePreview;
+    // Documents loaded later use the new setting too.
+    extensions = buildExtensions();
+    view?.dispatch({ effects: preview.reconfigure(previewOf(on)) });
+  }
 
   /** Right click: our menu with formatting. Shift + right click keeps the system one (spelling suggestions). */
   function contextMenu(e: MouseEvent, v: EditorView): boolean {
@@ -78,6 +90,7 @@
       decorations,
       reminderPhrases,
       codeBlocks({ path: () => path }),
+      preview.of(previewOf(loadPrefs().livePreview)),
       EditorView.domEventHandlers({ contextmenu: contextMenu }),
       keymap.of([
         { key: 'Mod-l', run: toggleTask },
@@ -207,6 +220,7 @@
     extensions = buildExtensions();
     view = new EditorView({ parent: host, state: EditorState.create({ doc: base, extensions }) });
     window.addEventListener(CHANGED_EVENT, onChanged);
+    window.addEventListener(PREFS_EVENT, onPrefs);
   });
 
   // Declarative loading (after onMount, so the view exists).
@@ -217,6 +231,7 @@
 
   onDestroy(() => {
     window.removeEventListener(CHANGED_EVENT, onChanged);
+    window.removeEventListener(PREFS_EVENT, onPrefs);
     // Leaving the view: save what is pending without waiting for the timer.
     if (view && path && (timer || view.state.doc.toString() !== base)) {
       clearTimeout(timer);
