@@ -37,6 +37,8 @@ fn main() {
             commands::toggle_task,
             commands::set_task_status,
             commands::task_line_done,
+            commands::save_attachment,
+            commands::import_attachment,
             commands::list_tags,
             commands::daily_note,
             commands::set_task_due,

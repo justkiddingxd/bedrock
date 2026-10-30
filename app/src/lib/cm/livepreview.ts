@@ -9,6 +9,7 @@ import { syntaxTree } from '@codemirror/language';
 import type { EditorState, Range } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { imageUrl } from '../assets';
 
 class Bullet extends WidgetType {
   eq() {
@@ -32,6 +33,42 @@ class Rule extends WidgetType {
     return el;
   }
 }
+
+/** A picture in place of its `![[…]]` or `![…](…)`; a click puts the cursor there and shows the text. */
+class Picture extends WidgetType {
+  constructor(
+    readonly target: string,
+    readonly from: string,
+    readonly alt: string,
+  ) {
+    super();
+  }
+  eq(other: Picture) {
+    return other.target === this.target && other.from === this.from;
+  }
+  toDOM(view: EditorView) {
+    const wrap = document.createElement('span');
+    wrap.className = 'cm-lp-image';
+    const img = document.createElement('img');
+    img.alt = this.alt;
+    img.onload = () => view.requestMeasure();
+    wrap.append(img);
+    imageUrl(this.target, this.from).then((url) => {
+      if (url) img.src = url;
+      else {
+        wrap.classList.add('missing');
+        wrap.textContent = `Картинка не найдена: ${this.target}`;
+      }
+    });
+    return wrap;
+  }
+  ignoreEvent() {
+    return false;
+  }
+}
+
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i;
+const PICTURE = /!\[\[([^[\]\n|]+)(?:\|([^[\]\n]*))?\]\]|!\[([^\]\n]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 
 const hide = Decoration.replace({});
 const bullet = Decoration.replace({ widget: new Bullet() });
@@ -67,7 +104,7 @@ function inCode(state: EditorState, pos: number): boolean {
   return false;
 }
 
-function build(view: EditorView): DecorationSet {
+function build(view: EditorView, note: string): DecorationSet {
   const { state } = view;
   const active = activeLines(view);
   const fmEnd = frontmatterEnd(state);
@@ -136,9 +173,16 @@ function build(view: EditorView): DecorationSet {
     for (let n = state.doc.lineAt(from).number; n <= state.doc.lineAt(to).number; n++) {
       if (shown(state.doc.line(n).from)) continue;
       const line = state.doc.line(n);
+      for (const m of line.text.matchAll(PICTURE)) {
+        const start = line.from + m.index;
+        const target = m[1] ?? m[4];
+        if ((m[1] && !IMAGE_FILE.test(target)) || inCode(state, start)) continue;
+        out.push(Decoration.replace({ widget: new Picture(target.trim(), note, m[2] ?? m[3] ?? target) }).range(start, start + m[0].length));
+      }
       for (const m of line.text.matchAll(WIKILINK)) {
         const start = line.from + m.index;
-        if (inCode(state, start)) continue;
+        // «![[…]]» is a picture (above) or an embedded note: left as written.
+        if (line.text[m.index - 1] === '!' || inCode(state, start)) continue;
         const end = start + m[0].length;
         out.push(hide.range(start, start + 2 + (m[2] ? m[1].length + 1 : 0)), hide.range(end - 2, end));
       }
@@ -158,16 +202,17 @@ function linkAt(view: EditorView, pos: number): string | null {
   return null;
 }
 
-export const livePreview = [
+/** `path` is the note being edited: pictures are found relative to it. */
+export const livePreview = (opts: { path: () => string }) => [
   ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
       constructor(view: EditorView) {
-        this.decorations = build(view);
+        this.decorations = build(view, opts.path());
       }
       update(u: ViewUpdate) {
         if (u.docChanged || u.viewportChanged || u.selectionSet || u.focusChanged || syntaxTree(u.state) !== syntaxTree(u.startState)) {
-          this.decorations = build(u.view);
+          this.decorations = build(u.view, opts.path());
         }
       }
     },

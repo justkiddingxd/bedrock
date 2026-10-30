@@ -16,6 +16,7 @@ tauri-build = { version = "2", features = [] }
 bedrock-core.workspace = true
 bedrock-sync.workspace = true
 
+base64.workspace = true
 chrono.workspace = true
 notify = "8"
 serde.workspace = true

@@ -311,6 +311,51 @@ pub fn task_line_done(line: String, done: bool) -> CmdResult<LineDone> {
     Ok(LineDone { line, next })
 }
 
+/// Where pasted, dropped and picked files go (Obsidian's «attachments folder»).
+const ATTACH_DIR: &str = "Вложения";
+const ATTACH_MAX: usize = 64 * 1024 * 1024;
+
+#[derive(serde::Serialize)]
+pub struct Attached {
+    path: String,
+    /// Shortest link text that finds the file: `![[link]]` or `[[link]]`.
+    link: String,
+    image: bool,
+}
+
+fn store_attachment(ws: &mut Workspace, name: &str, bytes: &[u8]) -> CmdResult<Attached> {
+    if bytes.len() > ATTACH_MAX {
+        return Err(format!("файл больше {} МБ", ATTACH_MAX / 1024 / 1024));
+    }
+    let clean: String = name.chars().map(|c| if r#"\/:*?"<>|"#.contains(c) { '-' } else { c }).collect();
+    let clean = clean.trim().trim_start_matches('.');
+    let file = if clean.is_empty() { "файл" } else { clean };
+    let rel = ws.vault.unique_path(&vault::join(ATTACH_DIR, file)).str_err()?;
+    ws.vault.write(&rel, bytes).str_err()?;
+    ws.index.update_path(&ws.vault, &rel);
+    Ok(Attached { link: ws.index.link_text_for(&rel), image: vault::is_image(&rel), path: rel })
+}
+
+/// Saves a pasted file (base64) into the attachments folder.
+#[tauri::command]
+pub fn save_attachment(state: State<'_, AppState>, name: String, data: String) -> CmdResult<Attached> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data.as_bytes()).str_err()?;
+    with_ws_mut(&state, |ws| store_attachment(ws, &name, &bytes))
+}
+
+/// Copies a file from the computer (dropped on the editor or picked) into the attachments folder.
+#[tauri::command]
+pub fn import_attachment(state: State<'_, AppState>, source: String) -> CmdResult<Attached> {
+    let src = std::path::PathBuf::from(&source);
+    let name = src.file_name().and_then(|n| n.to_str()).ok_or("у файла нет имени")?.to_string();
+    if std::fs::metadata(&src).str_err()?.len() as usize > ATTACH_MAX {
+        return Err(format!("файл больше {} МБ", ATTACH_MAX / 1024 / 1024));
+    }
+    let bytes = std::fs::read(&src).str_err()?;
+    with_ws_mut(&state, |ws| store_attachment(ws, &name, &bytes))
+}
+
 #[tauri::command]
 pub fn list_tags(state: State<'_, AppState>) -> CmdResult<Vec<TagCount>> {
     with_ws(&state, |ws| Ok(ws.index.tags()))

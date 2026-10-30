@@ -95,6 +95,8 @@ export interface TelegramStatus {
 }
 export interface TelegramLink { url: string; code: string }
 export interface ApiToken { id: number; name: string; created_at: number }
+/** A file saved into the vault's attachments folder; `link` finds it from any note. */
+export interface Attached { path: string; link: string; image: boolean }
 export interface ReminderWebhook { configured: boolean; url: string | null; last_status: string | null; last_delivery_at: number | null }
 export interface WebhookTestResult { delivered: boolean; status: number | null; body: string; error: string | null }
 export interface CreatedToken { id: number; name: string; token: string }
@@ -133,6 +135,8 @@ export const api = {
   quickSwitch: (query: string) => invoke<SwitchHit[]>('quick_switch', { query }),
   listTasks: (includeDone: boolean) => invoke<TaskItem[]>('list_tasks', { includeDone }),
   toggleTask: (path: string, line: number) => invoke<string>('toggle_task', { path, line }),
+  saveAttachment: (name: string, data: string) => invoke<Attached>('save_attachment', { name, data }),
+  importAttachment: (source: string) => invoke<Attached>('import_attachment', { source }),
   /** " " to do, "/" in progress, "x" done. */
   setTaskStatus: (path: string, line: number, status: string) => invoke<string>('set_task_status', { path, line, status }),
   /** A task line from the editor marked done or not, with the next occurrence of a repeating task. */

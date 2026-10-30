@@ -2020,6 +2020,12 @@ html[data-drag='widget'] .widget-drop {
   color: var(--accent);
 }
 
+/* A file dragged from the file manager over the editor. */
+.editor.file-over {
+  border-radius: 10px;
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent-line);
+}
 .daily-box {
   padding: 2px 0 8px;
   --cm-min: 220px;

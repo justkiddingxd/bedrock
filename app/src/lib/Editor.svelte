@@ -14,6 +14,9 @@
   import { editorMenu } from './cm/menu';
   import { codeBlocks } from './cm/codeblocks';
   import { livePreview } from './cm/livepreview';
+  import { insertAttachments, pastedFiles } from './cm/attachments';
+  import { getCurrentWebview } from '@tauri-apps/api/webview';
+  import { open as openDialog } from '@tauri-apps/plugin-dialog';
   import { PREFS_EVENT, loadPrefs, type Prefs } from './prefs';
   import { bedrockHighlight, bedrockTheme } from './cm/theme';
   import { dateCompletion, toggleTask, wikilinkCompletion, wikilinks } from './cm/wikilinks';
@@ -49,7 +52,45 @@
   let menu = $state<{ x: number; y: number; items: MenuEntry[] } | null>(null);
   /** Live preview, switched in the appearance settings. */
   const preview = new Compartment();
-  const previewOf = (on: boolean) => (on ? livePreview : []);
+  const previewOf = (on: boolean) => (on ? livePreview({ path: () => path }) : []);
+
+  const IMAGES = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif'];
+  /** «Картинка или файл…» in the right-click menu. */
+  async function pickFiles() {
+    const picked = await openDialog({
+      multiple: true,
+      title: 'Вставить в заметку',
+      filters: [
+        { name: 'Картинки', extensions: IMAGES },
+        { name: 'Все файлы', extensions: ['*'] },
+      ],
+    });
+    if (!view || !picked) return;
+    const paths = Array.isArray(picked) ? picked : [picked];
+    void insertAttachments(view, paths.map((src) => () => api.importAttachment(src)), view.state.selection.main.head, onError);
+  }
+
+  /** Files dragged from the file manager: the webview reports them (not as HTML drag events). */
+  function onFileDrag(e: { payload: { type: string; paths?: string[]; position?: { x: number; y: number } } }) {
+    const p = e.payload;
+    if (!view || p.type === 'leave' || !p.position) {
+      host.classList.remove('file-over');
+      return;
+    }
+    const scale = window.devicePixelRatio || 1;
+    const [x, y] = [p.position.x / scale, p.position.y / scale];
+    const r = host.getBoundingClientRect();
+    const inside = host.offsetParent !== null && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    if (p.type !== 'drop') {
+      host.classList.toggle('file-over', inside);
+      return;
+    }
+    host.classList.remove('file-over');
+    if (!inside || !p.paths?.length) return;
+    const at = view.posAtCoords({ x, y }) ?? view.state.selection.main.head;
+    void insertAttachments(view, p.paths.map((src) => () => api.importAttachment(src)), at, onError);
+  }
+  let stopFileDrag: (() => void) | undefined;
 
   function onPrefs(e: Event) {
     const on = (e as CustomEvent<Prefs>).detail.livePreview;
@@ -65,7 +106,11 @@
     // Like the system menu: a click outside the selection moves the cursor there.
     const pos = v.posAtCoords({ x: e.clientX, y: e.clientY });
     if (pos !== null && !v.state.selection.ranges.some((r) => pos >= r.from && pos <= r.to)) v.dispatch({ selection: { anchor: pos } });
-    menu = { x: e.clientX, y: e.clientY, items: editorMenu(v, pos, { onOpenLink: (raw) => onOpenLink(raw), onError: (m) => onError(m) }) };
+    menu = {
+      x: e.clientX,
+      y: e.clientY,
+      items: editorMenu(v, pos, { onOpenLink: (raw) => onOpenLink(raw), onError: (m) => onError(m), onAttach: () => void pickFiles() }),
+    };
     return true;
   }
 
@@ -90,6 +135,7 @@
       decorations,
       reminderPhrases,
       codeBlocks({ path: () => path }),
+      pastedFiles((m) => onError(m)),
       preview.of(previewOf(loadPrefs().livePreview)),
       EditorView.domEventHandlers({ contextmenu: contextMenu }),
       keymap.of([
@@ -221,6 +267,10 @@
     view = new EditorView({ parent: host, state: EditorState.create({ doc: base, extensions }) });
     window.addEventListener(CHANGED_EVENT, onChanged);
     window.addEventListener(PREFS_EVENT, onPrefs);
+    getCurrentWebview()
+      .onDragDropEvent(onFileDrag)
+      .then((stop) => (stopFileDrag = stop))
+      .catch(() => {});
   });
 
   // Declarative loading (after onMount, so the view exists).
@@ -232,6 +282,7 @@
   onDestroy(() => {
     window.removeEventListener(CHANGED_EVENT, onChanged);
     window.removeEventListener(PREFS_EVENT, onPrefs);
+    stopFileDrag?.();
     // Leaving the view: save what is pending without waiting for the timer.
     if (view && path && (timer || view.state.doc.toString() !== base)) {
       clearTimeout(timer);

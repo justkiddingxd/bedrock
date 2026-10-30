@@ -27,6 +27,8 @@ import { toggleTask } from './wikilinks';
 interface Context {
   onOpenLink: (raw: string) => void;
   onError: (message: string) => void;
+  /** Picks pictures or files from the computer and puts them into the note. */
+  onAttach: () => void;
 }
 
 /** A link at `pos`: a [[note]] or a web address. */
@@ -97,6 +99,7 @@ export function editorMenu(view: EditorView, pos: number | null, ctx: Context): 
     { label: 'Блок кода', icon: 'code-block', action: run(insertCodeBlock) },
     { label: 'Таблица', icon: 'table', action: run((v) => insertBlock(v, TABLE)) },
     { label: 'Разделитель', icon: 'minus', action: run((v) => insertBlock(v, '---')) },
+    { label: 'Картинка или файл…', icon: 'image', action: ctx.onAttach },
   );
 
   const today = localDate();

@@ -77,6 +77,10 @@ export const bedrockTheme = EditorView.theme({
   '.cm-date-done': { color: 'var(--text-3)' },
   '.cm-marker-alarm': { color: 'var(--accent)' },
   '.cm-marker-repeat': { color: 'var(--accent)' },
+  // Pictures in live preview
+  '.cm-lp-image': { display: 'block', margin: '6px 0', cursor: 'text' },
+  '.cm-lp-image img': { display: 'block', maxWidth: '100%', maxHeight: '480px', borderRadius: '8px' },
+  '.cm-lp-image.missing': { color: 'var(--text-3)', fontSize: '0.85em' },
   // Live preview
   '.cm-lp-bullet': { color: 'var(--text-2)', padding: '0 1px' },
   '.cm-lp-hr': { display: 'inline-block', width: '100%', height: '1px', verticalAlign: 'middle', background: 'var(--line)' },

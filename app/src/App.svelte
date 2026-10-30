@@ -33,6 +33,7 @@
   import { droppable, type Dnd } from './lib/drag';
   import { loadPrefs, savePrefs } from './lib/prefs';
   import { playDone } from './lib/sound';
+  import { setVaultRoot } from './lib/assets';
   import Sidebar, { NEW_FOLDER } from './lib/Sidebar.svelte';
   import FolderPicker from './lib/FolderPicker.svelte';
   import PromptDialog from './lib/PromptDialog.svelte';
@@ -211,6 +212,7 @@
       if (view.kind === 'note' && fresh.has(view.path)) await api.discardBlankNote(view.path);
       fresh.clear();
       const info = await api.openVault(path);
+      setVaultRoot(info.root);
       // Load everything before the vault screens render, so no view starts empty.
       [files, notes, summaries, tasks, sync] = await Promise.all([
         api.listFiles(),
