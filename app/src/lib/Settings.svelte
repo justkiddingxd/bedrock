@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ACCENTS, loadPrefs, savePrefs, type Prefs } from './prefs';
+  import { SOUNDS, playSound } from './sound';
 
   let { x, y, onClose }: { x: number; y: number; onClose: () => void } = $props();
   let prefs = $state<Prefs>(loadPrefs());
@@ -68,11 +69,20 @@
     </label>
   </section>
   <section>
-    <h4>Звуки</h4>
-    <label class="check-row">
-      <input type="checkbox" checked={prefs.sounds} onchange={(e) => set('sounds', e.currentTarget.checked)} />
-      <span>Звук при выполнении задачи</span>
-    </label>
+    <h4>Звук выполнения задачи</h4>
+    <!-- Choosing plays the sound, so it can be picked by ear. -->
+    <div class="sound-chips">
+      {#each SOUNDS as s (s.id)}
+        <button
+          class:active={prefs.sound === s.id}
+          aria-pressed={prefs.sound === s.id}
+          onclick={() => {
+            set('sound', s.id);
+            playSound(s.id);
+          }}>{s.label}</button
+        >
+      {/each}
+    </div>
   </section>
   <section>
     <h4>Боковая панель</h4>

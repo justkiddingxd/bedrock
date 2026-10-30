@@ -1,5 +1,7 @@
 /** Appearance settings, stored per device in localStorage and applied to <html>. */
 
+import type { Sound } from './sound';
+
 export type Theme = 'dark' | 'light' | 'system';
 export type TextSize = 's' | 'm' | 'l';
 
@@ -11,8 +13,8 @@ export interface Prefs {
   showTags: boolean;
   /** Hide Markdown marks outside the line being edited (live preview). */
   livePreview: boolean;
-  /** A chime when a task gets done. */
-  sounds: boolean;
+  /** The sound of a task getting done. */
+  sound: Sound;
 }
 
 /** Accent colors, each tuned for the light and the dark theme. */
@@ -25,14 +27,17 @@ export const ACCENTS = [
 
 const TEXT_SIZES: Record<TextSize, string> = { s: '15px', m: '16px', l: '17.5px' };
 const KEY = 'bedrock.prefs.v2';
-const DEFAULTS: Prefs = { theme: 'dark', accent: 'cobalt', textSize: 'm', showTags: true, livePreview: true, sounds: true };
+const DEFAULTS: Prefs = { theme: 'dark', accent: 'cobalt', textSize: 'm', showTags: true, livePreview: true, sound: 'drop' };
 
 /** Sent on window when settings change, for parts that are not styled by CSS (the editor). */
 export const PREFS_EVENT = 'bedrock:prefs';
 
 export function loadPrefs(): Prefs {
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') };
+    const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}');
+    // Before the choice of sounds there was only on or off.
+    if (saved.sounds === false && !saved.sound) saved.sound = 'off';
+    return { ...DEFAULTS, ...saved };
   } catch {
     return { ...DEFAULTS };
   }

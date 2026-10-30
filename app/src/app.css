@@ -1184,6 +1184,31 @@ html[data-drag] * {
   font-size: 12px;
   font-weight: 600;
 }
+.sound-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.sound-chips button {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  transition:
+    background-color var(--ease),
+    border-color var(--ease),
+    color var(--ease);
+}
+.sound-chips button:hover {
+  color: var(--text);
+}
+.sound-chips button.active {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--text);
+}
 .popover section + section {
   margin-top: 16px;
 }
