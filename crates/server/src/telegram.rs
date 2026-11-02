@@ -130,6 +130,9 @@ pub fn spawn(st: AppState) {
         }
     });
     tokio::spawn(async move {
+        if let Err(e) = reminders::sweep(&st).await {
+            tracing::warn!("repeating reminders: {e:?}");
+        }
         let mut timer = tokio::time::interval(tg.tick);
         loop {
             timer.tick().await;
@@ -293,6 +296,9 @@ async fn tick(st: &AppState) -> ApiResult<()> {
             notify(st, user_id, &text).await;
         }
         reminders::mark_sent(st, &r.vault_id, &r.key).await?;
+        if r.source == "server" {
+            reminders::refresh(st, &r.vault_id, &r.key).await?;
+        }
     }
 
     let ready: Vec<(i64, Digest)> = {

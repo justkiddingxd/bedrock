@@ -7,7 +7,7 @@
 
 use std::future::Future;
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use serde::Serialize;
 
 pub mod local;
@@ -68,6 +68,8 @@ pub trait Store: Send + Sync {
     fn can_write(&self) -> bool;
     /// Today in the vault owner's time zone (for daily notes and ✅ dates).
     fn today(&self) -> NaiveDate;
+    /// The local time now in the same zone (for the next time of repeating reminders).
+    fn now(&self) -> NaiveDateTime;
 }
 
 /// Where the tools find vaults: one local vault, or the vaults of a server account.

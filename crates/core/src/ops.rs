@@ -65,14 +65,11 @@ pub fn set_task_status(vault: &Vault, rel: &str, line: usize, status: char, toda
     Ok(updated)
 }
 
-/// Moves a repeating reminder line (not a task) past `after`. Returns whether the note changed.
-pub fn advance_reminder(vault: &Vault, rel: &str, line: usize, after: chrono::NaiveDateTime) -> Result<bool> {
-    let content = vault.read_string(rel)?;
-    let Some(body) = content.lines().nth(line) else { return Ok(false) };
-    let Some(moved) = text::advance_reminder(body, after) else { return Ok(false) };
-    let updated = text::replace_line(&content, line, &moved)?;
+/// Sets, changes or (with `at: None`) removes the reminder on `line` and how it repeats.
+pub fn set_reminder(vault: &Vault, rel: &str, line: usize, at: Option<chrono::NaiveDateTime>, repeat: Option<&str>) -> Result<String> {
+    let updated = text::set_reminder(&vault.read_string(rel)?, line, at, repeat)?;
     vault.write(rel, updated.as_bytes())?;
-    Ok(true)
+    Ok(updated)
 }
 
 /// The task operations on note text, for callers without a local vault
@@ -80,7 +77,7 @@ pub fn advance_reminder(vault: &Vault, rel: &str, line: usize, after: chrono::Na
 pub mod text {
     use std::sync::LazyLock;
 
-    use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
+    use chrono::{Duration, NaiveDate, NaiveDateTime};
     use regex::Regex;
 
     use super::{DUE_MARK, TASK_BOX};
@@ -89,16 +86,12 @@ pub mod text {
     use crate::{Error, Result};
 
     static DUE_DATE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(📅\x{FE0F}?\s*|due:)(\d{4}-\d{2}-\d{2})").unwrap());
+    static REPEAT_MARK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*🔁\x{FE0F}?(?:\s*[^📅⏳✅🛫➕⏰⏫🔼🔽🔺⏬#\n]*[^📅⏳✅🛫➕⏰⏫🔼🔽🔺⏬#\n\s])?").unwrap());
     static REMIND_AT: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"(⏰\x{FE0F}?\s*)(\d{4}-\d{2}-\d{2})([ T])(\d{1,2}):(\d{2})").unwrap());
 
     fn date(s: &str) -> Option<NaiveDate> {
         NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
-    }
-
-    /// Replaces the text of `line`, keeping its line ending.
-    pub fn replace_line(content: &str, line: usize, text: &str) -> Result<String> {
-        edit_line(content, line, |_| Ok(text.to_string()))
     }
 
     fn insert_line(content: &str, at: usize, text: &str) -> String {
@@ -109,8 +102,8 @@ pub mod text {
     }
 
     /// The next occurrence of a repeating task, as a new open task line: its due
-    /// date moves by the rule (not into the past) and its reminder moves along.
-    /// `None` when the line does not repeat.
+    /// date moves by the rule to a day after `today`, the day it got done, and its
+    /// reminder moves along. `None` when the line does not repeat.
     pub fn next_occurrence(body: &str, today: NaiveDate) -> Option<String> {
         let caps = TASK_BOX.captures(body)?;
         let rule = recur::parse_rule(&RECUR.captures(body)?[1])?;
@@ -121,7 +114,7 @@ pub mod text {
         let remind = REMIND_AT.captures(&open).and_then(|c| date(&c[2]));
         Some(match (due, remind) {
             (Some(due), _) => {
-                let next = recur::next_from(rule, due, today);
+                let next = recur::next_from(rule, due, today + Duration::days(1));
                 let shift = next - due;
                 let moved = DUE_DATE.replace(&open, |c: &regex::Captures| format!("{}{}", &c[1], next.format("%Y-%m-%d")));
                 REMIND_AT
@@ -141,19 +134,27 @@ pub mod text {
         })
     }
 
-    /// A repeating reminder line that is not a task, moved to its first time after `after`.
-    pub fn advance_reminder(body: &str, after: NaiveDateTime) -> Option<String> {
-        if TASK_BOX.is_match(body) {
-            return None;
+    /// Sets or changes the reminder of a line and how it repeats (`repeat: None`:
+    /// not at all). With `at: None` the reminder goes; a task keeps repeating.
+    pub fn set_reminder(content: &str, line: usize, at: Option<NaiveDateTime>, repeat: Option<&str>) -> Result<String> {
+        if repeat.is_some_and(|r| recur::parse_rule(r).is_none()) {
+            return Err(Error::Other(format!("не понимаю, как повторять: «{}»", repeat.unwrap_or_default())));
         }
-        let rule = recur::parse_rule(&RECUR.captures(body)?[1])?;
-        let c = REMIND_AT.captures(body)?;
-        let time = NaiveTime::from_hms_opt(c[4].parse().ok()?, c[5].parse().ok()?, 0)?;
-        let mut day = recur::next_after(rule, date(&c[2])?);
-        while day.and_time(time) <= after {
-            day = recur::next_after(rule, day);
-        }
-        Some(REMIND_AT.replace(body, |c: &regex::Captures| format!("{}{}{}{}:{}", &c[1], day.format("%Y-%m-%d"), &c[3], &c[4], &c[5])).into_owned())
+        edit_line(content, line, |body| {
+            let mut out = crate::parse::REMINDER.replace_all(body, "").into_owned();
+            if at.is_some() || !TASK_BOX.is_match(body) {
+                out = REPEAT_MARK.replace_all(&out, "").into_owned();
+            }
+            let out = out.trim_end();
+            let lead = if out.is_empty() { "" } else { " " };
+            Ok(match at {
+                Some(at) => {
+                    let rule = repeat.map_or(String::new(), |r| format!(" 🔁 {}", r.trim()));
+                    format!("{out}{lead}⏰ {}{rule}", at.format("%Y-%m-%d %H:%M"))
+                }
+                None => out.to_string(),
+            })
+        })
     }
 
     /// Sets the status character: 'x' completes the task (with its date and,
@@ -412,13 +413,31 @@ mod tests {
         assert_eq!(text::set_task_status("- [x] A ✅ 2026-10-29", 0, '/', today).unwrap(), "- [/] A");
         assert_eq!(text::set_task_status("- [/] A", 0, ' ', today).unwrap(), "- [ ] A");
         assert_eq!(text::set_task_status("- [/] A", 0, 'x', today).unwrap(), "- [x] A ✅ 2026-10-30");
-        // A repeating reminder line moves past the given time.
-        let after = today.and_hms_opt(12, 0, 0).unwrap();
+        // Done late, or on the day: the next one is after that day, never today.
+        let (_, next) = text::line_done("- [ ] Бег 🔁 каждый день 📅 2026-10-28 ⏰ 2026-10-28 07:00", true, today).unwrap();
+        assert_eq!(next.as_deref(), Some("- [ ] Бег 🔁 каждый день 📅 2026-10-31 ⏰ 2026-10-31 07:00"));
+        let (_, next) = text::line_done("- [ ] Бег 🔁 каждый день 📅 2026-10-30", true, today).unwrap();
+        assert_eq!(next.as_deref(), Some("- [ ] Бег 🔁 каждый день 📅 2026-10-31"));
+    }
+
+    #[test]
+    fn set_reminder_on_a_line() {
+        let at = |s: &str| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M").ok();
+        let set = |line: &str, when: &str, repeat| text::set_reminder(line, 0, at(when), repeat).unwrap();
+        assert_eq!(set("Полить цветы", "2026-11-03 09:00", Some("каждую неделю")), "Полить цветы ⏰ 2026-11-03 09:00 🔁 каждую неделю");
+        // A new time and rule replace the old ones, other markers stay.
         assert_eq!(
-            text::advance_reminder("Полить цветы ⏰ 2026-10-23 09:00 🔁 каждую неделю", after).as_deref(),
-            Some("Полить цветы ⏰ 2026-11-06 09:00 🔁 каждую неделю")
+            set("- [ ] Отчёт 📅 2026-11-03 ⏰ 2026-11-01 10:00 🔁 каждый день ⏫ #работа", "2026-11-05 18:30", Some("ежемесячно")),
+            "- [ ] Отчёт 📅 2026-11-03 ⏫ #работа ⏰ 2026-11-05 18:30 🔁 ежемесячно"
         );
-        assert_eq!(text::advance_reminder("- [ ] Задача ⏰ 2026-10-23 09:00 🔁 каждую неделю", after), None);
+        // No repeat: the rule goes.
+        assert_eq!(set("Полить ⏰ 2026-11-03 09:00 🔁 каждый день", "2026-11-04 09:00", None), "Полить ⏰ 2026-11-04 09:00");
+        // Removing: a plain line loses the rule too, a task keeps repeating.
+        assert_eq!(set("Полить ⏰ 2026-11-03 09:00 🔁 каждый день", "", None), "Полить");
+        assert_eq!(set("- [ ] Бег ⏰ 2026-11-03 09:00 🔁 каждый день", "", None), "- [ ] Бег 🔁 каждый день");
+        assert!(text::set_reminder("x", 0, at("2026-11-03 09:00"), Some("когда-нибудь")).is_err());
+        // The line ending stays, other lines too.
+        assert_eq!(text::set_reminder("a\nb\nc\n", 1, at("2026-11-03 09:00"), None).unwrap(), "a\nb ⏰ 2026-11-03 09:00\nc\n");
     }
 
     #[test]

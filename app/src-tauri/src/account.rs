@@ -147,5 +147,13 @@ fn dunce_path(p: &std::path::Path) -> String {
 
 #[tauri::command]
 pub fn list_reminders(state: State<'_, AppState>) -> CmdResult<Vec<ReminderItem>> {
-    with_ws(&state, |ws| Ok(ws.index.reminders()))
+    with_ws(&state, |ws| {
+        let now = chrono::Local::now().naive_local();
+        let mut items = ws.index.reminders();
+        for r in &mut items {
+            r.reminder.at = r.reminder.upcoming(now);
+        }
+        items.sort_by(|a, b| a.reminder.at.cmp(&b.reminder.at));
+        Ok(items)
+    })
 }

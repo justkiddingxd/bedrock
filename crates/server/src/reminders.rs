@@ -1,14 +1,17 @@
 //! Upcoming reminders for the Telegram bot and webhooks.
 //!
 //! Server vaults: found here, in every note written (`⏰ 2026-10-30 15:00`,
-//! in the owner's local time). End-to-end encrypted vaults: the apps send the
-//! reminders they found, since only they can read the notes.
+//! in the owner's local time). A repeating one (`🔁 каждый день`) has a row for
+//! its last time and one for its next, and each time that comes makes the next
+//! row, so it goes on with no app open and its note unchanged. End-to-end
+//! encrypted vaults: the apps send the reminders they found, since only they
+//! can read the notes.
 
 use std::collections::HashSet;
 
 use bedrock_core::{parse, vault};
-use bedrock_proto::ReminderItem;
-use chrono::NaiveDateTime;
+use bedrock_proto::{plain, ReminderItem};
+use chrono::{DateTime, Duration, NaiveDateTime};
 use sha2::{Digest, Sha256};
 use sqlx::Row;
 
@@ -25,27 +28,81 @@ fn short_hash(text: &str) -> String {
     hex::encode(&Sha256::digest(text.as_bytes())[..6])
 }
 
-/// The stored key of a reminder found in a note of a server vault.
-pub fn key(file_id: &str, r: &parse::Reminder) -> String {
-    format!("{file_id}:{}:{}", r.at, short_hash(&r.text))
+/// The stored key of one time of a reminder found in a note of a server vault.
+pub fn key(file_id: &str, at: &str, text: &str) -> String {
+    format!("{file_id}:{at}:{}", short_hash(text))
+}
+
+/// The local time in a key made by [`key`].
+pub fn key_time(key: &str) -> Option<&str> {
+    Some(key.split_once(':')?.1.rsplit_once(':')?.0)
+}
+
+/// The times of a reminder to keep rows for: a repeating one has its last time
+/// (unless long missed), for sending it late, and its next.
+fn times(r: &parse::Reminder, now: NaiveDateTime) -> Vec<NaiveDateTime> {
+    if r.rule().is_none() {
+        return NaiveDateTime::parse_from_str(&r.at, "%Y-%m-%d %H:%M").ok().into_iter().collect();
+    }
+    let missed = now - Duration::seconds(MISSED_SECS);
+    r.last_due(now).filter(|t| *t >= missed).into_iter().chain(r.next_due(now)).collect()
 }
 
 /// Replaces the reminders of one note of a server vault (`content` is `None` when it was deleted).
 pub async fn sync_file(st: &AppState, acc: &Access, file_id: &str, path: &str, content: Option<&[u8]>) -> ApiResult<()> {
+    sync(st, &acc.id, acc.owner_id, file_id, path, content).await
+}
+
+async fn sync(st: &AppState, vault_id: &str, owner_id: i64, file_id: &str, path: &str, content: Option<&[u8]>) -> ApiResult<()> {
     let prefix = format!("{file_id}:");
     let mut wanted = Vec::new();
     if let Some(content) = content.filter(|_| vault::is_note(path)) {
         let text = String::from_utf8_lossy(content);
         let parsed = parse::parse(&text);
         let note = parsed.title.clone().unwrap_or_else(|| vault::stem(path).to_string());
-        let offset = vaults::tz_offset(st, acc.owner_id).await? as i64 * 60;
+        let offset = vaults::tz_offset(st, owner_id).await? as i64 * 60;
+        let local_now = DateTime::from_timestamp(now() + offset, 0).unwrap_or_default().naive_utc();
         for r in parsed.reminders.iter().filter(|r| !r.done) {
-            let Ok(local) = NaiveDateTime::parse_from_str(&r.at, "%Y-%m-%d %H:%M") else { continue };
-            let at = local.and_utc().timestamp() - offset;
-            wanted.push((key(file_id, r), at, r.text.clone(), note.clone()));
+            for local in times(r, local_now) {
+                let at = local.and_utc().timestamp() - offset;
+                wanted.push((key(file_id, &local.format("%Y-%m-%d %H:%M").to_string(), &r.text), at, r.text.clone(), note.clone()));
+            }
         }
     }
-    replace(st, &acc.id, "server", Some(&prefix), wanted).await
+    replace(st, vault_id, "server", Some(&prefix), wanted).await
+}
+
+/// Reads the rows of the note a key belongs to from the note again: after one
+/// time of a repeating reminder, this makes the row of the next.
+pub async fn refresh(st: &AppState, vault_id: &str, key: &str) -> ApiResult<()> {
+    let Some((file_id, _)) = key.split_once(':') else { return Ok(()) };
+    let row = sqlx::query("SELECT f.blob, v.owner_id FROM files f JOIN vaults v ON v.id = f.vault_id WHERE f.vault_id = ? AND f.file_id = ? AND f.deleted = 0")
+        .bind(vault_id)
+        .bind(file_id)
+        .fetch_optional(&st.db)
+        .await?;
+    let Some(row) = row else { return Ok(()) };
+    let Some((path, content)) = row.get::<Option<Vec<u8>>, _>(0).and_then(|b| plain::decode(&b)) else { return Ok(()) };
+    sync(st, vault_id, row.get(1), file_id, &path, Some(&content)).await
+}
+
+/// On start: makes the rows of every note with a repeating reminder current,
+/// as those written before this version have none for later times.
+pub async fn sweep(st: &AppState) -> ApiResult<()> {
+    let rows = sqlx::query(
+        "SELECT f.vault_id, f.file_id, f.blob, v.owner_id FROM files f JOIN vaults v ON v.id = f.vault_id
+         WHERE v.mode = 'server' AND f.deleted = 0 AND instr(f.blob, ?) > 0",
+    )
+    .bind("🔁".as_bytes())
+    .fetch_all(&st.db)
+    .await?;
+    for row in rows {
+        let (vault_id, file_id): (String, String) = (row.get(0), row.get(1));
+        if let Some((path, content)) = row.get::<Option<Vec<u8>>, _>(2).and_then(|b| plain::decode(&b)) {
+            sync(st, &vault_id, row.get(3), &file_id, &path, Some(&content)).await?;
+        }
+    }
+    Ok(())
 }
 
 /// Replaces the reminders an app sent for an end-to-end encrypted vault.
@@ -120,7 +177,15 @@ pub struct Due {
 /// Reminders whose time has come. Long-missed ones are marked sent and skipped.
 pub async fn due(st: &AppState) -> ApiResult<Vec<Due>> {
     let now = now();
-    sqlx::query("UPDATE reminders SET sent = 1 WHERE sent = 0 AND at < ?").bind(now - MISSED_SECS).execute(&st.db).await?;
+    let missed = sqlx::query("UPDATE reminders SET sent = 1 WHERE sent = 0 AND at < ? AND source = 'client'").bind(now - MISSED_SECS);
+    missed.execute(&st.db).await?;
+    let missed = sqlx::query("UPDATE reminders SET sent = 1 WHERE sent = 0 AND at < ? AND source = 'server' RETURNING vault_id, key")
+        .bind(now - MISSED_SECS)
+        .fetch_all(&st.db)
+        .await?;
+    for r in &missed {
+        refresh(st, r.get(0), r.get(1)).await?;
+    }
     let rows = sqlx::query(
         "SELECT r.vault_id, v.name, r.key, r.at, r.text, r.note, r.source FROM reminders r JOIN vaults v ON v.id = r.vault_id
          WHERE r.sent = 0 AND r.at <= ? ORDER BY r.at LIMIT 200",

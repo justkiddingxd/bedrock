@@ -1,13 +1,15 @@
 //! Reminders of the open vault: a system notification when a `⏰` time
-//! comes (also for ones missed while the app was closed, up to 12 hours),
-//! and, for end-to-end encrypted vaults whose owner allowed it, handing the
-//! upcoming ones to the server so its Telegram bot can send them too.
+//! comes, every time for a repeating one (also for ones missed while the app
+//! was closed, up to 12 hours), and, for end-to-end encrypted vaults whose
+//! owner allowed it, handing the upcoming ones to the server so its Telegram
+//! bot can send them too.
 
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use bedrock_core::index::ReminderItem;
+use bedrock_core::recur;
 use bedrock_sync::proto::{self, VaultMode};
 use chrono::{Local, NaiveDateTime, TimeZone};
 use serde_json::json;
@@ -20,6 +22,11 @@ const TICK: Duration = Duration::from_secs(15);
 const LATE_HOURS: i64 = 12;
 const REUPLOAD: Duration = Duration::from_secs(10 * 60);
 const FIRED_FILE: &str = "reminders-fired.json";
+/// How far ahead the times of a repeating reminder go to the server.
+const UPLOAD_DAYS: i64 = 62;
+const UPLOAD_EACH: usize = 31;
+/// The server's limit for one vault.
+const UPLOAD_MAX: usize = 2000;
 
 pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
@@ -33,7 +40,6 @@ pub fn start(app: AppHandle) {
                 if let Some(f) = fired.as_mut() {
                     notify_due(&app, f, &items);
                 }
-                advance_repeating(&app, &items);
                 upload(&app, &items, &mut uploaded).await;
             }
             tokio::time::sleep(TICK).await;
@@ -77,16 +83,17 @@ impl Fired {
     }
 }
 
-fn key_of(r: &ReminderItem) -> String {
-    format!("{}|{}|{}", r.path, r.reminder.at, r.reminder.text)
+/// One time of a reminder.
+fn key_of(r: &ReminderItem, at: NaiveDateTime) -> String {
+    format!("{}|{}|{}", r.path, at.format("%Y-%m-%d %H:%M"), r.reminder.text)
 }
 
 fn notify_due(app: &AppHandle, fired: &mut Fired, items: &[ReminderItem]) {
     let now = Local::now().naive_local();
     let mut changed = false;
     for r in items {
-        let Some(at) = local_time(r) else { continue };
-        if at > now || now - at > chrono::Duration::hours(LATE_HOURS) || !fired.keys.insert(key_of(r)) {
+        let Some(at) = r.reminder.last_due(now) else { continue };
+        if now - at > chrono::Duration::hours(LATE_HOURS) || !fired.keys.insert(key_of(r, at)) {
             continue;
         }
         changed = true;
@@ -103,38 +110,6 @@ fn notify_due(app: &AppHandle, fired: &mut Fired, items: &[ReminderItem]) {
     }
 }
 
-/// Repeating reminder lines (not tasks, which repeat when done) whose time has
-/// passed move to their next time. Every device computes the same next time,
-/// so two of them doing it at once write the same text.
-fn advance_repeating(app: &AppHandle, items: &[ReminderItem]) {
-    let now = Local::now().naive_local();
-    let due: Vec<_> = items
-        .iter()
-        .filter(|r| !r.reminder.task && r.reminder.repeat.is_some() && local_time(r).is_some_and(|at| at <= now))
-        .collect();
-    if due.is_empty() {
-        return;
-    }
-    let state = app.state::<AppState>();
-    let Ok(mut guard) = state.ws.write() else { return };
-    let Some(ws) = guard.as_mut() else { return };
-    let mut changed = Vec::new();
-    for r in due {
-        match bedrock_core::ops::advance_reminder(&ws.vault, &r.path, r.reminder.line, now) {
-            Ok(true) => {
-                ws.index.update_path(&ws.vault, &r.path);
-                changed.push(r.path.clone());
-            }
-            Ok(false) => {}
-            Err(e) => tracing::warn!("repeating reminder in {}: {e}", r.path),
-        }
-    }
-    drop(guard);
-    if !changed.is_empty() {
-        let _ = app.emit("vault:changed", changed);
-    }
-}
-
 /// FNV-1a: a stable id that every device computes the same way.
 fn fnv(s: &str) -> u64 {
     s.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3))
@@ -148,17 +123,28 @@ async fn upload(app: &AppHandle, items: &[ReminderItem], uploaded: &mut Option<(
     }
     let mut list = Vec::new();
     if cfg.share_reminders {
-        let soon = Local::now().naive_local() - chrono::Duration::minutes(5);
+        let now = Local::now().naive_local();
+        let soon = now - chrono::Duration::minutes(5);
+        let horizon = now + chrono::Duration::days(UPLOAD_DAYS);
         for r in items {
-            let Some(at) = local_time(r).filter(|at| *at >= soon) else { continue };
-            let Some(at) = Local.from_local_datetime(&at).earliest() else { continue };
-            list.push(proto::ReminderItem {
-                key: format!("{:016x}", fnv(&key_of(r))),
-                at: at.timestamp(),
-                text: if r.reminder.text.is_empty() { r.note_title.clone() } else { r.reminder.text.clone() },
-                note: r.note_title.clone(),
-            });
+            let Some(first) = local_time(r) else { continue };
+            let times: Vec<NaiveDateTime> = match r.reminder.rule() {
+                Some(rule) => recur::times(rule, first).skip_while(|t| *t < soon).take_while(|t| *t <= horizon).take(UPLOAD_EACH).collect(),
+                None => Some(first).filter(|t| *t >= soon).into_iter().collect(),
+            };
+            for local in times {
+                let Some(at) = Local.from_local_datetime(&local).earliest() else { continue };
+                list.push(proto::ReminderItem {
+                    key: format!("{:016x}", fnv(&key_of(r, local))),
+                    at: at.timestamp(),
+                    text: if r.reminder.text.is_empty() { r.note_title.clone() } else { r.reminder.text.clone() },
+                    note: r.note_title.clone(),
+                });
+            }
         }
+        // The soonest ones, if a vault has more than the server takes.
+        list.sort_by_key(|i| i.at);
+        list.truncate(UPLOAD_MAX);
     } else if uploaded.as_ref().is_none_or(|u| u.0 != cfg.vault_id) {
         // Never shared from here, nothing to withdraw.
         return;

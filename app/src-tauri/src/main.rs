@@ -42,6 +42,7 @@ fn main() {
             commands::list_tags,
             commands::daily_note,
             commands::set_task_due,
+            commands::set_reminder,
             commands::restore_path,
             commands::discard_blank_note,
             commands::list_notes,

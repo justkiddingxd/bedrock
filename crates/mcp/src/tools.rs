@@ -2,6 +2,7 @@
 
 use bedrock_core::ops::{self, text};
 use bedrock_core::parse;
+use bedrock_core::recur;
 use bedrock_core::vault;
 use chrono::{NaiveDate, NaiveDateTime};
 use serde_json::{json, Value};
@@ -10,7 +11,7 @@ use crate::{Backend, FileMeta, Result, Store, ToolError};
 
 const VAULT_CONVENTIONS: &str = "Notes are Markdown files (Obsidian-compatible). \
 Tasks are lines like `- [ ] text 📅 2026-10-30 ⏫` (📅 due date, ⏫ high priority, ✅ date when done). \
-Reminders are `⏰ YYYY-MM-DD HH:MM` (local time) on a line. Daily notes live in `Дневник/YYYY-MM-DD.md`.";
+Reminders are `⏰ YYYY-MM-DD HH:MM` (local time) on a line, `🔁 каждый день` after it repeats them. Daily notes live in `Дневник/YYYY-MM-DD.md`.";
 
 fn tool(name: &str, description: &str, props: Value, required: &[&str]) -> Value {
     json!({
@@ -107,15 +108,16 @@ pub fn definitions(multi_vault: bool) -> Vec<Value> {
         ),
         tool(
             "add_reminder",
-            "Add a reminder: a task with ⏰ that the Bedrock app (and the Telegram bot, if linked) announces at that time.",
+            "Add a reminder: a task with ⏰ that the Bedrock app (and the Telegram bot, if linked) announces at that time, and again by `repeat` until the task is done.",
             json!({
                 "text": { "type": "string" },
-                "at": { "type": "string", "description": "Local date and time, \"YYYY-MM-DD HH:MM\"." },
+                "at": { "type": "string", "description": "Local date and time of the first time, \"YYYY-MM-DD HH:MM\"." },
+                "repeat": { "type": "string", "description": "How it repeats: \"каждый день\", \"по будням\", \"каждую неделю\", \"по вторникам и четвергам\", \"каждый месяц\", \"1-го числа\", \"каждый год\", \"каждые 2 недели\". Leave out for one time." },
                 "path": { "type": "string", "description": "Note to add it to (default: today's daily note)." },
             }),
             &["text", "at"],
         ),
-        tool("list_reminders", "List reminders that are not done yet, soonest first.", json!({}), &[]),
+        tool("list_reminders", "List reminders that are not done yet, soonest first. `at` of a repeating one is its next time, `repeat` its rule.", json!({}), &[]),
         tool(
             "daily_note",
             "Get the daily note of a date (default today): its path and text.",
@@ -457,23 +459,30 @@ async fn add_reminder<S: Store>(store: &S, args: &Value) -> Result<String> {
     let text = req_str(args, "text")?.replace('\n', " ");
     let at = NaiveDateTime::parse_from_str(req_str(args, "at")?, "%Y-%m-%d %H:%M")
         .map_err(|_| ToolError("at: нужно время \"YYYY-MM-DD HH:MM\"".into()))?;
+    let repeat = str_arg(args, "repeat").map(str::trim).filter(|r| !r.is_empty());
+    if let Some(r) = repeat.filter(|r| recur::parse_rule(r).is_none()) {
+        return Err(ToolError(format!("repeat: не понимаю «{r}». Например: каждый день, по будням, каждую неделю, каждый месяц, 1-го числа")));
+    }
     let path = match str_arg(args, "path") {
         Some(p) => resolve_or_new(store, p).await?,
         None => ops::daily_path(store.today()),
     };
     // The due date puts the task on that day's list too.
-    let task = format!("{text} 📅 {} ⏰ {}", at.format("%Y-%m-%d"), at.format("%Y-%m-%d %H:%M"));
+    let rule = repeat.map_or(String::new(), |r| format!(" 🔁 {r}"));
+    let task = format!("{text} 📅 {} ⏰ {}{rule}", at.format("%Y-%m-%d"), at.format("%Y-%m-%d %H:%M"));
     let line = insert_task(store, &path, &task).await?;
     to_json(&json!({ "path": path, "line": line, "at": at.format("%Y-%m-%d %H:%M").to_string() }))
 }
 
 async fn list_reminders<S: Store>(store: &S) -> Result<String> {
     let files = store.list().await?;
+    let now = store.now();
     let mut out = Vec::new();
     for f in notes_of(&files) {
         let content = store.read(&f.path).await?.unwrap_or_default();
         for r in parse::parse(&content).reminders.into_iter().filter(|r| !r.done) {
-            out.push((r.at.clone(), json!({ "path": f.path, "line": r.line, "at": r.at, "text": r.text })));
+            let at = r.upcoming(now);
+            out.push((at.clone(), json!({ "path": f.path, "line": r.line, "at": at, "text": r.text, "repeat": r.repeat })));
         }
     }
     out.sort_by(|a, b| a.0.cmp(&b.0));

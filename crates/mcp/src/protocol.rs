@@ -10,7 +10,7 @@ const VERSIONS: [&str; 3] = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const INSTRUCTIONS: &str = "Bedrock is an Obsidian-compatible notes and tasks app: a vault is a folder of Markdown files, \
 and every write here lands in the user's notes (shared vaults: other members see it too).\n\
 Format: tasks are `- [ ] text 📅 YYYY-MM-DD ⏫` (📅 due, ⏫/🔼/🔽 priority, `- [x] … ✅ date` when done); \
-reminders are `⏰ YYYY-MM-DD HH:MM` in the user's local time; daily notes are `Дневник/YYYY-MM-DD.md`.\n\
+reminders are `⏰ YYYY-MM-DD HH:MM` in the user's local time, and `🔁 каждый день` after it repeats them; daily notes are `Дневник/YYYY-MM-DD.md`.\n\
 How to work: find paths with list_notes/search_notes instead of guessing. To mark a task done, get its path and \
 0-based line from list_tasks, then call complete_task with path, line and part of its text (lines shift after edits). \
 Prefer edit_note or append_to_note for changes; write_note replaces the whole note, so read it first, and use it or \

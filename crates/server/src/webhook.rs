@@ -329,6 +329,7 @@ pub async fn queue_reminder(st: &AppState, r: &Due) -> ApiResult<()> {
 /// due date and priority). Serialized once: every attempt sends these bytes.
 async fn reminder_event(st: &AppState, r: &Due) -> ApiResult<Option<(String, String)>> {
     let Some((file_id, _)) = r.key.split_once(':') else { return Ok(None) };
+    let Some(at) = reminders::key_time(&r.key) else { return Ok(None) };
     let row = sqlx::query("SELECT blob FROM files WHERE vault_id = ? AND file_id = ? AND deleted = 0")
         .bind(&r.vault_id)
         .bind(file_id)
@@ -338,14 +339,16 @@ async fn reminder_event(st: &AppState, r: &Due) -> ApiResult<Option<(String, Str
         return Ok(None);
     };
     let parsed = parse::parse(&String::from_utf8_lossy(&content));
-    let Some(rem) = parsed.reminders.iter().find(|x| !x.done && reminders::key(file_id, x) == r.key) else { return Ok(None) };
+    let is_it = |x: &&parse::Reminder| !x.done && (x.at == at || x.rule().is_some()) && reminders::key(file_id, at, &x.text) == r.key;
+    let Some(rem) = parsed.reminders.iter().find(is_it) else { return Ok(None) };
     let task = parsed.tasks.iter().find(|t| t.line == rem.line);
-    let id = event_id(&r.vault_id, &path, &rem.text, &rem.at);
+    // `at` is this time of a repeating reminder, so each time is its own event.
+    let id = event_id(&r.vault_id, &path, &rem.text, at);
     let event = Event {
         event_type: "reminder",
         id: &id,
         test: false,
-        at: &rem.at,
+        at,
         at_utc: utc(r.at),
         vault: EventVault { id: &r.vault_id, name: &r.vault_name },
         task: EventTask {

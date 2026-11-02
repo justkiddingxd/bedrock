@@ -390,6 +390,20 @@ pub fn set_task_due(state: State<'_, AppState>, path: String, line: usize, due: 
     })
 }
 
+/// Sets, changes or (with `at: None`) removes the reminder of a line and how it repeats.
+#[tauri::command]
+pub fn set_reminder(state: State<'_, AppState>, path: String, line: usize, at: Option<String>, repeat: Option<String>) -> CmdResult<String> {
+    let at = at
+        .as_deref()
+        .map(|a| chrono::NaiveDateTime::parse_from_str(a, "%Y-%m-%d %H:%M").map_err(|_| format!("неверное время: {a}")))
+        .transpose()?;
+    with_ws_mut(&state, |ws| {
+        let content = ops::set_reminder(&ws.vault, &path, line, at, repeat.as_deref()).str_err()?;
+        ws.index.update_path(&ws.vault, &path);
+        Ok(content)
+    })
+}
+
 #[tauri::command]
 pub fn list_notes(state: State<'_, AppState>) -> CmdResult<Vec<NoteSummary>> {
     with_ws(&state, |ws| Ok(ws.index.summaries()))

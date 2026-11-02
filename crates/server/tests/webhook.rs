@@ -235,3 +235,98 @@ async fn reminder_webhook() {
     let test = call(reqwest::Method::POST, "/api/reminder-webhook/test").send().await.unwrap();
     assert_eq!(test.status(), 400);
 }
+
+/// A repeating reminder: each time is one event, its note stays as written, and
+/// its next time gets a row, also after the server was down and after a restart.
+#[tokio::test]
+async fn repeating_reminder() {
+    let receiver = Shared::default();
+    let hook = serve(Router::new().route("/hook", post(receive)).with_state(receiver.clone())).await;
+    let events = || receiver.lock().unwrap().got.clone();
+
+    let data = tempfile::tempdir().unwrap();
+    let config = || {
+        let mut cfg = Config::new("127.0.0.1:0".parse().unwrap(), data.path().to_path_buf(), Registration::Open);
+        cfg.reminder_tick_secs = 1;
+        cfg.webhook_allow_hosts = vec!["127.0.0.1".into()];
+        cfg
+    };
+    let url = serve(bedrock_server::build_app(config()).await.unwrap()).await;
+    let anon = ApiClient::new(&url).unwrap();
+    let token = anon.register("alice", "password1").await.unwrap().token;
+    let alice = anon.with_token(&token);
+    alice.set_me(&MeSettings { tz_offset_min: 180 }).await.unwrap();
+    let http = reqwest::Client::new();
+    let call = |method: reqwest::Method, path: &str| http.request(method, format!("{url}{path}")).bearer_auth(&token);
+    let put = call(reqwest::Method::PUT, "/api/reminder-webhook")
+        .json(&json!({ "url": format!("{hook}/hook"), "secret": SECRET }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(put.status(), 200);
+    let vault = SyncEngine::create_remote_vault(&alice, "main", VaultMode::Server, None, KdfParams::INSECURE_TEST).await.unwrap();
+
+    // Started yesterday at this minute: the time due now is today's.
+    let time = |t: chrono::DateTime<chrono::Utc>| t.format("%Y-%m-%d %H:%M").to_string();
+    let local = chrono::Utc::now() + chrono::Duration::minutes(180);
+    let today = time(local);
+    let tomorrow = time(local + chrono::Duration::days(1));
+    let content = format!("- [ ] Выпить таблетки ⏰ {} 🔁 каждый день\n", time(local - chrono::Duration::days(1)));
+    let note = format!("/api/vaults/{}/notes/Дом.md", vault.id);
+    let put = call(reqwest::Method::PUT, &note).json(&json!({ "content": content })).send().await.unwrap();
+    assert!(put.status().is_success());
+
+    until("the event", || !events().is_empty()).await;
+    tokio::time::sleep(Duration::from_millis(2500)).await;
+    let got = events();
+    assert_eq!(got.len(), 1);
+    let (id, _, event) = verify(&got[0].0, &got[0].1);
+    assert_eq!(event["at"], today.as_str());
+    assert_eq!(event["task"]["text"], "Выпить таблетки");
+    assert_eq!(id, hex::encode(Sha256::digest(format!("{}|Дом.md|Выпить таблетки|{today}", vault.id).as_bytes())));
+
+    // The note is as written.
+    let read: Value = call(reqwest::Method::GET, &note).send().await.unwrap().json().await.unwrap();
+    assert_eq!(read["content"], content.as_str());
+
+    // Today's time is sent, tomorrow's waits.
+    let db = sqlx::SqlitePool::connect(&format!("sqlite://{}", data.path().join("bedrock.db").display())).await.unwrap();
+    let rows = || async {
+        let rows: Vec<(String, bool)> = sqlx::query_as("SELECT key, sent FROM reminders ORDER BY at").fetch_all(&db).await.unwrap();
+        rows
+    };
+    let settled = |rows: &[(String, bool)]| {
+        rows.len() == 2 && rows[0].0.contains(&today) && rows[0].1 && rows[1].0.contains(&tomorrow) && !rows[1].1
+    };
+    let now = rows().await;
+    assert!(settled(&now), "{now:?}");
+
+    // A time missed by hours (the server was down): not sent, and the next one still comes.
+    let missed = time(local - chrono::Duration::hours(7));
+    sqlx::query("DELETE FROM reminders WHERE sent = 0").execute(&db).await.unwrap();
+    sqlx::query("INSERT INTO reminders (vault_id, key, at, text, note, source, sent) VALUES (?, ?, ?, 'Выпить таблетки', 'Дом', 'server', 0)")
+        .bind(&vault.id)
+        .bind(now[0].0.replace(&today, &missed))
+        .bind(chrono::Utc::now().timestamp() - 7 * 3600)
+        .execute(&db)
+        .await
+        .unwrap();
+    let start = Instant::now();
+    while !settled(&rows().await) {
+        assert!(start.elapsed() < Duration::from_secs(10), "{:?}", rows().await);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert_eq!(events().len(), 1);
+
+    // A note with no rows yet (written before repeats fired by themselves) gets
+    // them when the server starts; the time already delivered is not sent again.
+    sqlx::query("DELETE FROM reminders").execute(&db).await.unwrap();
+    let _restarted = bedrock_server::build_app(config()).await.unwrap();
+    let start = Instant::now();
+    while !rows().await.iter().any(|r| r.0.contains(&tomorrow) && !r.1) {
+        assert!(start.elapsed() < Duration::from_secs(10), "{:?}", rows().await);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(2500)).await;
+    assert_eq!(events().len(), 1);
+}

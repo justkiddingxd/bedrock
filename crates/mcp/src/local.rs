@@ -2,7 +2,7 @@
 //! app (and its sync) picks them up like any other edit.
 
 use bedrock_core::Vault;
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 
 use crate::{Backend, FileMeta, Result, Store, VaultInfo};
 
@@ -48,6 +48,10 @@ impl Store for LocalStore {
 
     fn today(&self) -> NaiveDate {
         chrono::Local::now().date_naive()
+    }
+
+    fn now(&self) -> NaiveDateTime {
+        chrono::Local::now().naive_local()
     }
 }
 

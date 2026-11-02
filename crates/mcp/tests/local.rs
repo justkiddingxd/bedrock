@@ -44,6 +44,14 @@ async fn tools_roundtrip() {
     let (_, rem) = call(&b, "list_reminders", json!({})).await;
     assert!(rem.contains("\"at\": \"2026-10-30 09:00\"") && rem.contains("Позвонить маме"), "{rem}");
 
+    // A repeating one: the line keeps its first time, `at` is the next one.
+    let (err, out) = call(&b, "add_reminder", json!({ "text": "Витамины", "at": "2020-01-06 08:30", "repeat": "каждый день" })).await;
+    assert!(!err, "{out}");
+    let (_, rem) = call(&b, "list_reminders", json!({})).await;
+    assert!(rem.contains("\"repeat\": \"каждый день\"") && !rem.contains("2020-01-06"), "{rem}");
+    let (err, out) = call(&b, "add_reminder", json!({ "text": "Витамины", "at": "2020-01-06 08:30", "repeat": "когда-нибудь" })).await;
+    assert!(err && out.contains("repeat"), "{out}");
+
     // Free names, exact edits, search, and errors the model can read.
     let (_, a) = call(&b, "create_note", json!({ "title": "Идеи: список", "content": "раз" })).await;
     let (_, b2) = call(&b, "create_note", json!({ "title": "Идеи: список" })).await;

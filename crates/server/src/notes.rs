@@ -10,7 +10,7 @@ use bedrock_core::ops::text;
 use bedrock_core::vault;
 use bedrock_mcp::{tools, Backend, FileMeta, Store, ToolError, VaultInfo};
 use bedrock_proto::{plain, AppendRequest, NoteContent, NoteMeta, PushResult, RemindersRequest, VaultMode, WriteNoteRequest, WriteResult};
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::Row;
@@ -30,15 +30,15 @@ pub struct ServerStore {
     st: AppState,
     acc: Access,
     user: AuthUser,
-    today: NaiveDate,
+    now: NaiveDateTime,
 }
 
 impl ServerStore {
     pub async fn open(st: &AppState, acc: Access, user: AuthUser) -> ApiResult<Self> {
         acc.require_server_mode()?;
         let offset = vaults::tz_offset(st, acc.owner_id).await? as i64;
-        let today = (chrono::Utc::now() + chrono::Duration::minutes(offset)).date_naive();
-        Ok(Self { st: st.clone(), acc, user, today })
+        let now = (chrono::Utc::now() + chrono::Duration::minutes(offset)).naive_utc();
+        Ok(Self { st: st.clone(), acc, user, now })
     }
 
     async fn read_row(&self, path: &str) -> ApiResult<Option<(String, i64, i64)>> {
@@ -89,7 +89,11 @@ impl Store for ServerStore {
     }
 
     fn today(&self) -> NaiveDate {
-        self.today
+        self.now.date()
+    }
+
+    fn now(&self) -> NaiveDateTime {
+        self.now
     }
 }
 

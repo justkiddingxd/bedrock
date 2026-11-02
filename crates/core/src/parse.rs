@@ -102,6 +102,43 @@ pub struct Reminder {
     pub repeat: Option<String>,
 }
 
+impl Reminder {
+    /// How it repeats, if at all (a rule that cannot be understood counts as none).
+    pub fn rule(&self) -> Option<crate::recur::Rule> {
+        self.repeat.as_deref().and_then(crate::recur::parse_rule)
+    }
+
+    fn first(&self) -> Option<chrono::NaiveDateTime> {
+        chrono::NaiveDateTime::parse_from_str(&self.at, "%Y-%m-%d %H:%M").ok()
+    }
+
+    /// The time it last came due, at or before `now`.
+    pub fn last_due(&self, now: chrono::NaiveDateTime) -> Option<chrono::NaiveDateTime> {
+        let first = self.first()?;
+        match self.rule() {
+            Some(rule) => crate::recur::last_time(rule, first, now),
+            None => Some(first).filter(|t| *t <= now),
+        }
+    }
+
+    /// The next time it comes due after `now`.
+    pub fn next_due(&self, now: chrono::NaiveDateTime) -> Option<chrono::NaiveDateTime> {
+        let first = self.first()?;
+        match self.rule() {
+            Some(rule) => crate::recur::next_time(rule, first, now),
+            None => Some(first).filter(|t| *t > now),
+        }
+    }
+
+    /// The time to show: the next one of a repeating reminder, the only one of any other.
+    pub fn upcoming(&self, now: chrono::NaiveDateTime) -> String {
+        match self.rule().and_then(|_| self.next_due(now)) {
+            Some(next) => next.format("%Y-%m-%d %H:%M").to_string(),
+            None => self.at.clone(),
+        }
+    }
+}
+
 /// A scalar frontmatter field other than title, tags and aliases.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Property {
