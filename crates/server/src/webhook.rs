@@ -342,6 +342,9 @@ async fn reminder_event(st: &AppState, r: &Due) -> ApiResult<Option<(String, Str
     let is_it = |x: &&parse::Reminder| !x.done && (x.at == at || x.rule().is_some()) && reminders::key(file_id, at, &x.text) == r.key;
     let Some(rem) = parsed.reminders.iter().find(is_it) else { return Ok(None) };
     let task = parsed.tasks.iter().find(|t| t.line == rem.line);
+    // As of this time: a repeating task is not reported as late.
+    let day = at.get(..10).and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+    let due = task.and_then(|t| day.map_or(t.due.clone(), |d| t.due_on(d)));
     // `at` is this time of a repeating reminder, so each time is its own event.
     let id = event_id(&r.vault_id, &path, &rem.text, at);
     let event = Event {
@@ -355,7 +358,7 @@ async fn reminder_event(st: &AppState, r: &Due) -> ApiResult<Option<(String, Str
             text: &rem.text,
             path: &path,
             line: rem.line,
-            due: task.and_then(|t| t.due.as_deref()),
+            due: due.as_deref(),
             priority: task.map(|t| t.priority),
         },
     };

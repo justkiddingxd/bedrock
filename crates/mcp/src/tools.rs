@@ -368,13 +368,15 @@ async fn list_tasks<S: Store>(store: &S, args: &Value) -> Result<String> {
         None => None,
     };
     let files = store.list().await?;
+    let today = store.today();
     let mut tasks = Vec::new();
     for f in notes_of(&files) {
         if only.as_ref().is_some_and(|p| *p != f.path) {
             continue;
         }
         let content = store.read(&f.path).await?.unwrap_or_default();
-        for t in parse::parse(&content).tasks {
+        for mut t in parse::parse(&content).tasks {
+            t.due = t.due_on(today);
             let wanted = match status {
                 "done" => t.done,
                 "all" => true,
@@ -396,7 +398,7 @@ async fn list_tasks<S: Store>(store: &S, args: &Value) -> Result<String> {
         .map(|(path, t)| {
             json!({
                 "path": path, "line": t.line, "text": t.text, "done": t.done,
-                "due": t.due, "priority": t.priority, "done_date": t.done_date,
+                "due": t.due, "priority": t.priority, "done_date": t.done_date, "repeat": t.recurrence,
             })
         })
         .collect();

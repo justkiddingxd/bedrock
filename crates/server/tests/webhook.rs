@@ -271,7 +271,8 @@ async fn repeating_reminder() {
     let local = chrono::Utc::now() + chrono::Duration::minutes(180);
     let today = time(local);
     let tomorrow = time(local + chrono::Duration::days(1));
-    let content = format!("- [ ] Выпить таблетки ⏰ {} 🔁 каждый день\n", time(local - chrono::Duration::days(1)));
+    let first = time(local - chrono::Duration::days(1));
+    let content = format!("- [ ] Выпить таблетки 📅 {} ⏰ {first} 🔁 каждый день\n", &first[..10]);
     let note = format!("/api/vaults/{}/notes/Дом.md", vault.id);
     let put = call(reqwest::Method::PUT, &note).json(&json!({ "content": content })).send().await.unwrap();
     assert!(put.status().is_success());
@@ -283,6 +284,7 @@ async fn repeating_reminder() {
     let (id, _, event) = verify(&got[0].0, &got[0].1);
     assert_eq!(event["at"], today.as_str());
     assert_eq!(event["task"]["text"], "Выпить таблетки");
+    assert_eq!(event["task"]["due"], &today[..10]);
     assert_eq!(id, hex::encode(Sha256::digest(format!("{}|Дом.md|Выпить таблетки|{today}", vault.id).as_bytes())));
 
     // The note is as written.

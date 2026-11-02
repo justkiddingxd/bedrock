@@ -48,7 +48,7 @@
   <div class="reminder-item">
     <button
       class="next-row reminder-row"
-      class:passed={r.at < now}
+      class:passed={!r.repeat && r.at < now}
       onclick={() => p.onOpen(r.path, r.line)}
       oncontextmenu={(e) => {
         e.preventDefault();

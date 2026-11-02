@@ -929,7 +929,12 @@
         await Promise.race([leave, new Promise((r) => setTimeout(r, 1500))]);
       }),
     ];
-    const clock = setInterval(() => (today = localDate()), 30_000);
+    const clock = setInterval(() => {
+      if (today === localDate()) return;
+      today = localDate();
+      // A new day: repeating tasks move on to their next day.
+      void refreshAll();
+    }, 30_000);
     window.addEventListener('keydown', onKeydown, true);
     const mouseNav = ['mousedown', 'mouseup', 'auxclick'] as const;
     mouseNav.forEach((t) => window.addEventListener(t, onMouseNav, true));

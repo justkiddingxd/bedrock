@@ -274,7 +274,7 @@ pub fn quick_switch(state: State<'_, AppState>, query: String) -> CmdResult<Vec<
 
 #[tauri::command]
 pub fn list_tasks(state: State<'_, AppState>, include_done: bool) -> CmdResult<Vec<TaskItem>> {
-    with_ws(&state, |ws| Ok(ws.index.tasks(include_done)))
+    with_ws(&state, |ws| Ok(ws.index.tasks(include_done, today())))
 }
 
 #[tauri::command]

@@ -49,6 +49,9 @@ async fn tools_roundtrip() {
     assert!(!err, "{out}");
     let (_, rem) = call(&b, "list_reminders", json!({})).await;
     assert!(rem.contains("\"repeat\": \"каждый день\"") && !rem.contains("2020-01-06"), "{rem}");
+    // Its task is never overdue, though the line still has the first date.
+    let (_, list) = call(&b, "list_tasks", json!({})).await;
+    assert!(list.contains("Витамины") && list.contains("\"repeat\": \"каждый день\"") && !list.contains("2020-01-06"), "{list}");
     let (err, out) = call(&b, "add_reminder", json!({ "text": "Витамины", "at": "2020-01-06 08:30", "repeat": "когда-нибудь" })).await;
     assert!(err && out.contains("repeat"), "{out}");
 

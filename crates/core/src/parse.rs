@@ -86,6 +86,21 @@ pub struct Task {
     pub tags: Vec<String>,
 }
 
+impl Task {
+    /// The due date to go by. A repeating task is never late: once its date has
+    /// passed, it is due on the first day of its rule from `today` on. The line
+    /// stays as written, and a task done keeps the date it had.
+    pub fn due_on(&self, today: chrono::NaiveDate) -> Option<String> {
+        let due = self.due.as_deref()?;
+        let date = chrono::NaiveDate::parse_from_str(due, "%Y-%m-%d").ok().filter(|d| *d < today && !self.done);
+        let rule = self.recurrence.as_deref().and_then(crate::recur::parse_rule);
+        Some(match (date, rule) {
+            (Some(date), Some(rule)) => crate::recur::next_from(rule, date, today).format("%Y-%m-%d").to_string(),
+            _ => due.to_string(),
+        })
+    }
+}
+
 /// A line with a reminder marker. `at` is local time, "YYYY-MM-DD HH:MM".
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -432,6 +447,29 @@ pub(crate) fn percent_decode(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repeating_task_is_never_late() {
+        // 2026-11-03 is a Tuesday.
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 11, 3).unwrap();
+        let due = |line: &str| parse(line).tasks[0].due_on(today);
+        for (line, want) in [
+            ("- [ ] Бег 📅 2026-10-30 🔁 каждый день", "2026-11-03"),
+            ("- [ ] Отчёт 📅 2026-10-30 🔁 каждую неделю", "2026-11-06"),
+            ("- [ ] Йога 📅 2026-10-30 🔁 по вторникам и четвергам", "2026-11-03"),
+            ("- [ ] Аренда 📅 2026-10-05 🔁 каждый месяц 5-го", "2026-11-05"),
+            // Its date is still ahead, or today.
+            ("- [ ] Потом 📅 2026-11-10 🔁 каждый день", "2026-11-10"),
+            ("- [ ] Сегодня 📅 2026-11-03 🔁 каждую неделю", "2026-11-03"),
+            // Not repeating, done, or a rule nobody understands: as written.
+            ("- [ ] Разовая 📅 2026-10-30", "2026-10-30"),
+            ("- [x] Бег 📅 2026-10-30 🔁 каждый день ✅ 2026-10-30", "2026-10-30"),
+            ("- [ ] Икс 📅 2026-10-30 🔁 когда-нибудь", "2026-10-30"),
+        ] {
+            assert_eq!(due(line).as_deref(), Some(want), "{line}");
+        }
+        assert_eq!(due("- [ ] Без срока 🔁 каждый день"), None);
+    }
 
     const NOTE: &str = concat!(
         "---\n",

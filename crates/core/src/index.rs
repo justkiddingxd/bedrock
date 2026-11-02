@@ -408,7 +408,8 @@ impl Index {
         out
     }
 
-    pub fn tasks(&self, include_done: bool) -> Vec<TaskItem> {
+    /// Tasks with their due dates as of `today` (a repeating one is never late, see [`Task::due_on`]).
+    pub fn tasks(&self, include_done: bool, today: chrono::NaiveDate) -> Vec<TaskItem> {
         let mut out: Vec<TaskItem> = self
             .notes
             .values()
@@ -417,7 +418,7 @@ impl Index {
                 n.parsed.tasks.iter().filter(|t| (include_done || !t.done) && !t.text.is_empty()).map(|t| TaskItem {
                     path: n.path.clone(),
                     note_title: n.title.clone(),
-                    task: t.clone(),
+                    task: Task { due: t.due_on(today), ..t.clone() },
                 })
             })
             .collect();
@@ -733,8 +734,9 @@ mod tests {
         assert_eq!(idx.search("#lang", 10).len(), 2);
         assert_eq!(idx.search("#lang fast", 10).len(), 1);
 
-        assert_eq!(idx.tasks(false).len(), 1);
-        assert_eq!(idx.tasks(true).len(), 2);
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 11, 3).unwrap();
+        assert_eq!(idx.tasks(false, today).len(), 1);
+        assert_eq!(idx.tasks(true, today).len(), 2);
         assert_eq!(idx.tags().len(), 2);
 
         let sw = idx.quick_switch("b", 5);
