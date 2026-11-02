@@ -1,6 +1,6 @@
 /**
- * «напомнить завтра в 9», «напомни в пятницу в 15:30», «напомнить через 2 часа»:
- * finds such a phrase in a line and turns it into the marker «⏰ 2026-10-30 15:00»
+ * «напомнить завтра в 9», «напомни в пятницу в 15:30», «напомнить через 2 часа»,
+ * «напоминай каждый день в 9»: finds such a phrase in a line and turns it into the marker «⏰ 2026-10-30 15:00»
  * (the Obsidian Reminder format), which the app, the server and MCP understand.
  */
 import { addDays, localDate, toDate } from './dates';
@@ -19,7 +19,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const stamp = (day: string, h: number, m: number) => `${day} ${pad(h)}:${pad(m)}`;
 const END = '(?![а-яёa-z0-9])';
 
-const TRIGGER = new RegExp(`(^|[\\s,;(—-])(напомн(?:и|ить|ите|ишь))${END}`, 'i');
+const TRIGGER = new RegExp(`(^|[\\s,;(—-])(напомн(?:и|ить|ите|ишь)|напомин(?:ай|айте|ать))${END}`, 'i');
 const WEEKDAYS = ['воскресенье|вс', 'понедельник|пн', 'вторник|вт', 'среду|среда|ср', 'четверг|чт', 'пятницу|пятница|пт', 'субботу|суббота|сб'];
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'ма', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 const PERIODS: Record<string, number> = { утром: 9, днём: 13, днем: 13, вечером: 19 };

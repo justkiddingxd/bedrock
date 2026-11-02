@@ -6,6 +6,11 @@ export function localDate(d = new Date()): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** A local time written as "YYYY-MM-DD HH:MM". */
+export function localStamp(d = new Date()): string {
+  return `${localDate(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function toDate(day: string): Date {
   const [y, m, d] = day.split('-').map(Number);
   return new Date(y, m - 1, d);

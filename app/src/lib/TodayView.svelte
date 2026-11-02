@@ -9,7 +9,7 @@
   import MonthWidget from './widgets/MonthWidget.svelte';
   import RemindersWidget from './widgets/RemindersWidget.svelte';
   import StatsWidget from './widgets/StatsWidget.svelte';
-  import { api, dailyPath, displayName, parentDir, type Entry, type NoteRef, type NoteSummary, type TaskItem } from './api';
+  import { api, dailyPath, displayName, parentDir, type Entry, type NoteRef, type NoteSummary, type TaskItem, type ReminderItem } from './api';
   import { draggable, droppable, type Dnd, type DropSpec } from './drag';
   import { addDays, dayLabel, dayMonth, dueLabel, relTime, weekStart, weekdayName, weekdayShort, toDate } from './dates';
   import { parseQuickTask } from './quick';
@@ -49,6 +49,8 @@
     onOpenLink: (raw: string, from: string) => void;
     onTag: (tag: string) => void;
     onError: (message: string) => void;
+    onEditReminder: (r: ReminderItem) => void;
+    onNewReminder: () => void;
   }
   let p: Props = $props();
 
@@ -123,7 +125,15 @@
     }
     if (id === 'reminders') {
       const days = opt(id, 'days', 3);
-      items.push({ heading: 'На сколько дней' }, choice('days', 1, 'Только сегодня', days), choice('days', 3, '3 дня', days), choice('days', 7, 'Неделя', days));
+      items.push(
+        { heading: 'На сколько дней' },
+        choice('days', 1, 'Только сегодня', days),
+        choice('days', 3, '3 дня', days),
+        choice('days', 7, 'Неделя', days),
+        choice('days', 30, 'Месяц', days),
+        { heading: 'Показывать' },
+        toggle('repeating', 'Все повторяющиеся', true),
+      );
     }
     if (id === 'next' || id === 'important' || id === 'inbox') counts([5, 10], 5);
     if (id === 'recent') counts([5, 10, 15], 5);
@@ -336,7 +346,15 @@
       <div class="widget-empty">Впереди задач со сроком нет.</div>
     {/each}
   {:else if id === 'reminders'}
-    <RemindersWidget today={p.today} tasks={p.tasks} days={opt('reminders', 'days', 3)} onOpen={p.onOpen} />
+    <RemindersWidget
+      today={p.today}
+      tasks={p.tasks}
+      days={opt('reminders', 'days', 3)}
+      repeating={opt('reminders', 'repeating', true)}
+      onOpen={p.onOpen}
+      onEdit={p.onEditReminder}
+      onNew={p.onNewReminder}
+    />
   {:else if id === 'important'}
     {#each important as t (`${t.path}:${t.line}`)}
       <TaskRow task={t} today={p.today} onToggle={p.onToggle} onOpen={p.onOpen} onMenu={p.onTaskMenu} />

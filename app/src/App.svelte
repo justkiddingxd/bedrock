@@ -37,6 +37,8 @@
   import Sidebar, { NEW_FOLDER } from './lib/Sidebar.svelte';
   import FolderPicker from './lib/FolderPicker.svelte';
   import PromptDialog from './lib/PromptDialog.svelte';
+  import ReminderDialog from './lib/ReminderDialog.svelte';
+  import { reminderLabel } from './lib/reminder';
   import TodayView from './lib/TodayView.svelte';
   import NoteView from './lib/NoteView.svelte';
   import NoteRail from './lib/NoteRail.svelte';
@@ -90,6 +92,8 @@
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
   let picker = $state<{ title: string; folders: string[]; current: string; pick: (folder: string) => void } | null>(null);
   let dialog = $state<{ title: string; label: string; value: string; action: string; submit: (v: string) => void } | null>(null);
+  /** The reminder dialog: for a line of a note, or a new reminder (`path: null`). */
+  let reminderFor = $state<{ path: string | null; line: number; text: string | null; at: string | null; repeat: string | null } | null>(null);
 
   /** Untitled notes made by «Новая заметка» and not renamed yet; deleted if left without text. */
   const fresh = new Set<string>();
@@ -701,6 +705,38 @@
     }
   }
 
+  /** New reminders from the main screen gather in one note. */
+  const REMINDERS_NOTE = 'Напоминания.md';
+
+  /** Saves the reminder dialog: changes the line, or adds a line for a new reminder. */
+  async function saveReminder(at: string | null, repeat: string | null, text = '') {
+    const r = reminderFor;
+    if (!r) return;
+    reminderFor = null;
+    const path = r.path ?? REMINDERS_NOTE;
+    try {
+      if (r.path) await api.setReminder(r.path, r.line, at, repeat);
+      else {
+        const before = files.some((f) => f.path === path) ? await api.readNote(path) : '';
+        const line = `- ${text} ⏰ ${at}${repeat ? ` 🔁 ${repeat}` : ''}`;
+        await api.saveNote(path, `${before}${before && !before.endsWith('\n') ? '\n' : ''}${line}\n`, before);
+      }
+      const open = {
+        label: 'Открыть',
+        run: () => {
+          toast = null;
+          openNote(path);
+        },
+      };
+      if (at) showToast(`Напомнит ${reminderLabel(at, today)}${repeat ? `, дальше ${repeat}` : ''}`, 'bell', r.path ? undefined : open);
+      else showToast('Напоминание убрано', 'bell');
+    } catch (e) {
+      fail(e);
+    }
+    await refreshAll();
+    window.dispatchEvent(new CustomEvent(CHANGED_EVENT, { detail: [path] }));
+  }
+
   function taskMenu(e: MouseEvent, t: TaskItem) {
     const set = (date: string | null) => () => reschedule([t], date);
     const options: [string, string][] = [
@@ -722,8 +758,14 @@
           action: set(day),
         });
     if (t.due) items.push({ label: 'Убрать срок', icon: 'x', action: set(null) });
+    items.push('-');
+    if (!t.done)
+      items.push({
+        label: t.reminder ? 'Изменить напоминание…' : 'Напомнить…',
+        icon: 'bell',
+        action: () => (reminderFor = { path: t.path, line: t.line, text: t.text, at: t.reminder ?? null, repeat: t.recurrence ?? null }),
+      });
     items.push(
-      '-',
       { label: t.done ? 'Вернуть в работу' : 'Выполнено', icon: 'check', action: () => toggleTask(t) },
       { label: 'Открыть в заметке', icon: 'doc', action: () => openNote(t.path, t.line) },
     );
@@ -874,6 +916,8 @@
             openNote(r.path, r.line);
           },
         });
+        // A repeating one now shows its next time.
+        void refreshAll();
       }),
       // Closing the window also leaves the note: save it, and drop it if it is a blank new one.
       // Never let this hold the window open for long.
@@ -1010,6 +1054,8 @@
             onMenu={(e, items) => (menu = { ...at(e), items })}
             onAddTask={addTask}
             onCapture={capture}
+            onEditReminder={(r) => (reminderFor = { path: r.path, line: r.line, text: r.text || r.noteTitle, at: r.at, repeat: r.repeat })}
+            onNewReminder={() => (reminderFor = { path: null, line: 0, text: null, at: null, repeat: null })}
             {dnd}
             onOpenDaily={openDaily}
             onOpenLink={followRaw}
@@ -1126,6 +1172,16 @@
       action={dialog.action}
       onSubmit={dialog.submit}
       onClose={() => (dialog = null)}
+    />
+  {/if}
+  {#if reminderFor}
+    <ReminderDialog
+      text={reminderFor.text}
+      at={reminderFor.at}
+      repeat={reminderFor.repeat}
+      onSave={saveReminder}
+      onRemove={reminderFor.at ? () => saveReminder(null, null) : undefined}
+      onClose={() => (reminderFor = null)}
     />
   {/if}
 {/if}

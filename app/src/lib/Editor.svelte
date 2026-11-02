@@ -10,7 +10,7 @@
   import { bracketMatching, indentOnInput, syntaxHighlighting } from '@codemirror/language';
   import { CHANGED_EVENT, api, errText, type NoteRef, type SaveResult } from './api';
   import Menu, { type MenuEntry } from './Menu.svelte';
-  import { toggleWrap } from './cm/format';
+  import { lineReminder, setLineReminder, toggleWrap } from './cm/format';
   import { editorMenu } from './cm/menu';
   import { codeBlocks } from './cm/codeblocks';
   import { livePreview } from './cm/livepreview';
@@ -22,6 +22,7 @@
   import { dateCompletion, toggleTask, wikilinkCompletion, wikilinks } from './cm/wikilinks';
   import { decorations } from './cm/decor';
   import { reminderPhrases } from './cm/reminders';
+  import ReminderDialog from './ReminderDialog.svelte';
 
   interface Props {
     getNotes: () => NoteRef[];
@@ -53,6 +54,22 @@
   /** Live preview, switched in the appearance settings. */
   const preview = new Compartment();
   const previewOf = (on: boolean) => (on ? livePreview({ path: () => path }) : []);
+
+  /** The reminder dialog from the right-click menu, for one line. */
+  let reminder = $state<{ line: number; text: string; at: string | null; repeat: string | null } | null>(null);
+  function openReminder() {
+    if (!view) return;
+    const line = view.state.doc.lineAt(view.state.selection.main.head);
+    reminder = { line: line.number, ...lineReminder(line.text) };
+  }
+  function closeReminder() {
+    reminder = null;
+    view?.focus();
+  }
+  function applyReminder(at: string | null, repeat: string | null) {
+    if (view && reminder) setLineReminder(view, reminder.line, at, repeat);
+    closeReminder();
+  }
 
   const IMAGES = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif'];
   /** «Картинка или файл…» in the right-click menu. */
@@ -109,7 +126,7 @@
     menu = {
       x: e.clientX,
       y: e.clientY,
-      items: editorMenu(v, pos, { onOpenLink: (raw) => onOpenLink(raw), onError: (m) => onError(m), onAttach: () => void pickFiles() }),
+      items: editorMenu(v, pos, { onOpenLink: (raw) => onOpenLink(raw), onError: (m) => onError(m), onAttach: () => void pickFiles(), onReminder: openReminder }),
     };
     return true;
   }
@@ -305,5 +322,15 @@
       menu = null;
       view?.focus();
     }}
+  />
+{/if}
+{#if reminder}
+  <ReminderDialog
+    text={reminder.text}
+    at={reminder.at}
+    repeat={reminder.repeat}
+    onSave={applyReminder}
+    onRemove={reminder.at ? () => applyReminder(null, null) : undefined}
+    onClose={closeReminder}
   />
 {/if}

@@ -1820,13 +1820,95 @@ html[data-drag='widget'] .widget-drop {
 .file-row.short {
   grid-template-columns: minmax(0, 1fr) 76px;
 }
-.reminder-row {
-  grid-template-columns: 112px minmax(0, 1fr);
+.reminder-dialog:focus {
+  outline: none;
+}
+.reminder-about {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.reminder-when {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 136px;
+  gap: 10px;
+}
+.reminder-repeats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.reminder-repeats button {
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 400;
+  transition:
+    background-color var(--ease),
+    color var(--ease),
+    border-color var(--ease);
+}
+.reminder-repeats button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.reminder-repeats button.active {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+.reminder-preview {
+  min-height: 18px;
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.reminder-preview.bad {
+  color: var(--danger);
+}
+.reminder-item {
+  position: relative;
+}
+.reminder-item .next-row {
+  padding-right: 34px;
+}
+.reminder-item .row-action {
+  position: absolute;
+  top: 4px;
+  right: -6px;
+  margin: 0;
+}
+.reminder-item:hover .row-action {
+  opacity: 1;
+}
+.widget-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 4px 0;
+  color: var(--text-2);
+  font-size: 12.5px;
+  transition: color var(--ease);
+}
+.widget-new:hover {
+  color: var(--text);
+}
+.next-row.reminder-row {
+  grid-template-columns: 136px minmax(0, 1fr);
 }
 .reminder-row .d {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  white-space: nowrap;
   color: var(--accent);
 }
 .reminder-row.passed {

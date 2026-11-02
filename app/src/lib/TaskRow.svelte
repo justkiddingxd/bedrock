@@ -2,7 +2,8 @@
   import Icon from './Icon.svelte';
   import { dailyDay, type TaskItem } from './api';
   import { draggable } from './drag';
-  import { dayMonth, daysBetween, dueLabel } from './dates';
+  import { dayMonth, daysBetween, dueLabel, localStamp } from './dates';
+  import { nextTime, parseRule } from './recur';
   import { reminderLabel } from './reminder';
 
   interface Props {
@@ -25,6 +26,11 @@
     const day = dailyDay(task.path);
     if (!day) return task.noteTitle;
     return day === today ? 'Заметка дня' : `Дневник, ${dayMonth(day)}`;
+  });
+  /** A repeating reminder shows its next time, not the first one in the note. */
+  const alarm = $derived.by(() => {
+    const rule = task.recurrence ? parseRule(task.recurrence) : null;
+    return task.reminder && rule ? nextTime(rule, task.reminder, localStamp()) : task.reminder;
   });
   const dueClass = $derived(
     !task.due || task.done ? '' : daysBetween(today, task.due) < 0 ? 'due-overdue' : task.due === today ? 'due-today' : '',
@@ -62,11 +68,9 @@
     <div class="task-sub">
       {#if showNote}<button class="note-link" onclick={() => onOpen(task.path)}>{source}</button>{/if}
       {#if showDate && task.due}<span class={dueClass}>{dueLabel(task.due, today)}</span>{/if}
-      {#if task.reminder && !task.done}
+      {#if alarm && !task.done}
         <span class="task-alarm" title="Напоминание">
-          <Icon name="bell" size={12} />{task.reminder.slice(0, 10) === task.due || task.reminder.slice(0, 10) === today
-            ? task.reminder.slice(11)
-            : reminderLabel(task.reminder, today)}
+          <Icon name="bell" size={12} />{alarm.slice(0, 10) === task.due || alarm.slice(0, 10) === today ? alarm.slice(11) : reminderLabel(alarm, today)}
         </span>
       {/if}
       {#if task.recurrence && !task.done}

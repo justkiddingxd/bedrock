@@ -238,6 +238,41 @@ export function setMarker(view: EditorView, kind: 'due' | 'remind', value: strin
   return rewriteLines(view, (text) => `${text.replace(re, '').trimEnd()} ${mark} ${value}`);
 }
 
+const REMIND_AT = /\s*⏰\uFE0F?\s*(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})/gu;
+const REPEAT = /\s*🔁\uFE0F?(?:\s*([^📅⏳✅🛫➕⏰⏫🔼🔽🔺⏬#\n]*[^📅⏳✅🛫➕⏰⏫🔼🔽🔺⏬#\n\s]))?/gu;
+
+/** The reminder of a line, how it repeats, and what the line says without its marks. */
+export function lineReminder(text: string): { text: string; at: string | null; repeat: string | null } {
+  const at = [...text.matchAll(REMIND_AT)][0];
+  const repeat = [...text.matchAll(REPEAT)][0];
+  return {
+    text: text
+      .replace(/^\s*(?:(?:[-*+]|\d+[.)])\s+(?:\[.\]\s+)?|#{1,6}\s+|>\s*)/, '')
+      .replace(REMIND_AT, '')
+      .replace(REPEAT, '')
+      .replace(/\s*(?:(?:📅|✅)\uFE0F?\s*\d{4}-\d{2}-\d{2}|[⏫🔼🔽])/gu, '')
+      .trim(),
+    at: at ? `${at[1]} ${at[2].padStart(2, '0')}:${at[3]}` : null,
+    repeat: repeat?.[1]?.trim() || null,
+  };
+}
+
+/** The line with this reminder, as the core writes it: `at: null` removes it, and a task keeps repeating. */
+export function withReminder(text: string, at: string | null, repeat: string | null): string {
+  let out = text.replace(REMIND_AT, '');
+  if (at || lineKind(text).block !== 'task') out = out.replace(REPEAT, '');
+  out = out.trimEnd();
+  if (!at) return out;
+  return `${out}${out ? ' ' : ''}⏰ ${at}${repeat ? ` 🔁 ${repeat.trim()}` : ''}`;
+}
+
+/** Sets or removes the reminder of the line with this number. */
+export function setLineReminder(view: EditorView, number: number, at: string | null, repeat: string | null) {
+  if (number > view.state.doc.lines) return;
+  const line = view.state.doc.line(number);
+  view.dispatch({ changes: { from: line.from, to: line.to, insert: withReminder(line.text, at, repeat) }, userEvent: 'input.format' });
+}
+
 // ------------------------------------------------------------ clipboard
 
 function selectedText(view: EditorView): string {

@@ -170,6 +170,7 @@ export const api = {
   deleteApiToken: (id: number) => invoke<void>('delete_api_token', { id }),
   mcpInfo: () => invoke<McpInfo>('mcp_info'),
   listReminders: () => invoke<ReminderItem[]>('list_reminders'),
+  setReminder: (path: string, line: number, at: string | null, repeat: string | null) => invoke<string>('set_reminder', { path, line, at, repeat }),
 };
 
 /** Window event fired with the paths that changed on disk; editors reload themselves. */

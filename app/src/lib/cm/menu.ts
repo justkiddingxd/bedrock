@@ -29,6 +29,8 @@ interface Context {
   onError: (message: string) => void;
   /** Picks pictures or files from the computer and puts them into the note. */
   onAttach: () => void;
+  /** Opens the dialog for the reminder of the line under the cursor. */
+  onReminder: () => void;
 }
 
 /** A link at `pos`: a [[note]] or a web address. */
@@ -117,6 +119,7 @@ export function editorMenu(view: EditorView, pos: number | null, ctx: Context): 
   items.push(
     { heading: 'Напомнить' },
     { row: reminders().map(([text, at]) => ({ text, title: `Напоминание: ${at}`, action: run((v) => setMarker(v, 'remind', at)) })) },
+    { label: line.text.includes('⏰') ? 'Изменить напоминание…' : 'Дата, время и повтор…', icon: 'repeat', action: ctx.onReminder },
   );
 
   items.push(
