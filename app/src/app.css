@@ -2783,16 +2783,51 @@ html[data-drag='widget'] .widget-drop {
 .markdown li::marker {
   color: var(--text-2);
 }
-.markdown li:has(> .task-checkbox) {
+/* With a blank line between the items, the checkbox sits in a paragraph. */
+.markdown li:has(> .task-checkbox),
+.markdown li:has(> p:first-child > .task-checkbox) {
   list-style: none;
   margin-left: -1.4em;
 }
 .markdown .task-checkbox {
   margin-right: 10px;
 }
-.markdown li:has(> .task-checkbox:checked) {
+.markdown li:has(> .task-checkbox:checked),
+.markdown li:has(> p:first-child > .task-checkbox:checked) {
   color: var(--text-2);
   text-decoration: line-through;
+}
+/* Task marks (📅 ⏰ 🔁), as in the editor. */
+.markdown .task-mark {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin: 0 3px 0 2px;
+  color: var(--text-2);
+}
+.markdown .task-mark.accent {
+  color: var(--accent);
+}
+.markdown .task-mark.ok {
+  color: var(--ok);
+}
+.markdown .task-mark.high {
+  color: var(--danger);
+}
+.markdown .task-mark.medium {
+  color: var(--code);
+}
+.markdown .task-mark.low {
+  color: var(--text-3);
+}
+.markdown .task-value {
+  color: var(--text-2);
+  font-size: 0.9em;
+}
+.markdown .task-value.accent {
+  color: var(--accent);
+}
+.markdown .task-value.faint {
+  color: var(--text-3);
 }
 .markdown table {
   border-collapse: collapse;

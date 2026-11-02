@@ -28,6 +28,14 @@
     });
   });
 
+  // Task marks (📅 ⏰ 🔁) come as empty spans: the rendered HTML carries no SVG.
+  $effect(() => {
+    void html;
+    el?.querySelectorAll<HTMLElement>('.task-mark[data-icon]').forEach((mark) => {
+      mark.innerHTML = iconSvg(mark.dataset.icon ?? '', 13, 1.6);
+    });
+  });
+
   // Code blocks get «Копировать» and, when long, «Свернуть» / «Развернуть».
   $effect(() => {
     void html;

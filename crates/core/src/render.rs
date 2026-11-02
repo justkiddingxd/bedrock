@@ -2,11 +2,19 @@
 //! links become `<a data-target>` / `<a data-tag>` elements the UI handles;
 //! local images become `<img data-src>` that the UI maps to the asset protocol.
 
+use std::sync::LazyLock;
+
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use regex::{Captures, Regex};
 
 use crate::index::Index;
 use crate::parse::{self, WIKILINK};
 use crate::vault;
+
+/// Task marks in text (due, scheduled and done dates, reminder, priority, repeat rule).
+static MARK: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:(📅|⏳|✅)\x{FE0F}?\s*(\d{4}-\d{2}-\d{2}))|(?:⏰\x{FE0F}?\s*(\d{4}-\d{2}-\d{2}[ T]\d{1,2}:\d{2}))|([⏫🔺🔼🔽⏬])\x{FE0F}?|(?:🔁\x{FE0F}?\s*([^📅⏳✅🛫➕⏰⏫🔼🔽🔺⏬#\n]*[^📅⏳✅🛫➕⏰⏫🔼🔽🔺⏬#\n\s]))").unwrap()
+});
 
 pub fn render(content: &str, index: &Index, from: &str) -> String {
     let (body, body_offset) = split_frontmatter(content);
@@ -151,7 +159,7 @@ fn push_tags<'a>(s: &str, events: &mut Vec<Event<'a>>) {
         }
         let hash = m.start() - 1;
         if hash > last {
-            events.push(Event::Text(s[last..hash].to_string().into()));
+            push_marks(&s[last..hash], events);
         }
         events.push(Event::InlineHtml(
             format!(r##"<a class="tag" href="#" data-tag="{t}">#{t}</a>"##, t = esc(tag)).into(),
@@ -159,7 +167,46 @@ fn push_tags<'a>(s: &str, events: &mut Vec<Event<'a>>) {
         last = m.start() + tag.len();
     }
     if last < s.len() {
+        push_marks(&s[last..], events);
+    }
+}
+
+fn push_marks<'a>(s: &str, events: &mut Vec<Event<'a>>) {
+    let mut last = 0;
+    for c in MARK.captures_iter(s) {
+        let whole = c.get(0).unwrap();
+        if whole.start() > last {
+            events.push(Event::Text(s[last..whole.start()].to_string().into()));
+        }
+        events.push(Event::InlineHtml(mark_html(&c).into()));
+        last = whole.end();
+    }
+    if last < s.len() {
         events.push(Event::Text(s[last..].to_string().into()));
+    }
+}
+
+/// A task mark, drawn as in the editor. The icon stays empty here, since
+/// sanitized HTML has no SVG: the preview fills it in from `data-icon`.
+fn mark_html(c: &Captures) -> String {
+    let icon = |name: &str, class: &str, title: &str| format!(r#"<span class="task-mark {class}" data-icon="{name}" title="{title}"></span>"#);
+    let value = |class: &str, text: &str| format!(r#"<span class="task-value {class}">{}</span>"#, esc(text));
+    if let Some(kind) = c.get(1) {
+        match kind.as_str() {
+            "📅" => icon("calendar", "accent", "срок") + &value("", &c[2]),
+            "⏳" => icon("clock", "", "запланировано") + &value("", &c[2]),
+            _ => icon("check", "ok", "выполнено") + &value("faint", &c[2]),
+        }
+    } else if let Some(at) = c.get(3) {
+        icon("bell", "accent", "напоминание") + &value("accent", at.as_str())
+    } else if let Some(priority) = c.get(4) {
+        match priority.as_str() {
+            "⏫" | "🔺" => icon("flag", "high", "высокий приоритет"),
+            "🔼" => icon("flag", "medium", "средний приоритет"),
+            _ => icon("flag", "low", "низкий приоритет"),
+        }
+    } else {
+        icon("repeat", "accent", "повторяется") + &value("", &c[5])
     }
 }
 
@@ -227,5 +274,22 @@ mod tests {
         assert!(html.contains("<code>[[code]]</code>"));
         assert!(!html.contains("<script>"));
         assert!(!html.contains("title: t"));
+    }
+
+    #[test]
+    fn task_marks_become_icons() {
+        let src = "- [ ] ПТ 📅 2026-10-31 ⏰ 2026-10-31 03:50 🔁 каждый день ⏫ #работа\n- [x] Бег ✅ 2026-11-01\n\nПочему `📅 2026-01-01` в коде\n\n🔁 <b>каждый</b>";
+        let html = render(src, &Index::default(), "Note.md");
+        for mark in ["calendar", "bell", "repeat", "flag", "check"] {
+            assert!(html.contains(&format!(r#"data-icon="{mark}""#)), "{mark}: {html}");
+        }
+        assert!(html.contains(r#"<span class="task-value ">2026-10-31</span>"#), "{html}");
+        assert!(html.contains(r#"<span class="task-value accent">2026-10-31 03:50</span>"#), "{html}");
+        assert!(html.contains(r#"<span class="task-value ">каждый день</span>"#), "{html}");
+        assert!(html.contains(r#"data-tag="работа""#), "{html}");
+        // The emoji are gone from the text, but code stays as written.
+        assert!(html.contains("<code>📅 2026-01-01</code>"), "{html}");
+        assert_eq!(html.matches('📅').count(), 1, "{html}");
+        assert!(!html.contains('⏰') && !html.contains('⏫') && !html.contains('✅'), "{html}");
     }
 }
